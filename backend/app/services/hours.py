@@ -29,7 +29,8 @@ def calculate_late_minutes(user: User, fichaje: Fichaje) -> int:
     if user.scheduled_start is None:
         return 0
 
-    start = fichaje.start_time
+    # Strip tzinfo if present — DB stores naive UTC; tests may pass tz-aware datetimes
+    start = fichaje.start_time.replace(tzinfo=None)
     scheduled_dt = datetime.combine(start.date(), user.scheduled_start)
     diff = int((start - scheduled_dt).total_seconds() / 60)
     return max(0, diff)

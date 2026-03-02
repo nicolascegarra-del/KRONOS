@@ -41,7 +41,12 @@ async def setup_db():
 
 @pytest_asyncio.fixture
 async def session(setup_db) -> AsyncGenerator[AsyncSession, None]:
+    """Clean all tables before each test so every test starts with a fresh DB."""
     async with TestSessionLocal() as s:
+        # Wipe data in reverse-dependency order (children first)
+        for table in reversed(SQLModel.metadata.sorted_tables):
+            await s.execute(table.delete())
+        await s.commit()
         yield s
         await s.rollback()
 

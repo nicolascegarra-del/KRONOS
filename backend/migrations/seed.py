@@ -1,5 +1,6 @@
 """
-Seed script: creates admin@test.com and worker@test.com if they don't exist.
+Seed script: creates admin@test.com and worker@test.com if they don't exist,
+and seeds the default pause types.
 Run via: python -m migrations.seed
 Or called automatically from lifespan in main.py.
 """
@@ -11,8 +12,18 @@ from sqlmodel import SQLModel
 
 from app.database import engine, AsyncSessionLocal
 from app.models.user import User, UserRole
+from app.models.pausa_tipo import PausaTipo
 from app.services.auth import hash_password
 
+
+DEFAULT_PAUSE_TYPES = [
+    "Almuerzo",
+    "Comida",
+    "Visita Médica",
+    "Accidente",
+    "Descanso",
+    "Otros",
+]
 
 SEED_USERS = [
     {
@@ -58,6 +69,20 @@ async def seed() -> None:
             print(f"[seed] Created user: {data['email']}")
 
         await session.commit()
+
+    # Seed default pause types
+    async with AsyncSessionLocal() as session:
+        for name in DEFAULT_PAUSE_TYPES:
+            result = await session.execute(
+                select(PausaTipo).where(PausaTipo.name == name)
+            )
+            if not result.scalar_one_or_none():
+                session.add(PausaTipo(name=name))
+                print(f"[seed] Created pause type: {name}")
+            else:
+                print(f"[seed] Pause type '{name}' already exists, skipping.")
+        await session.commit()
+
     print("[seed] Done.")
 
 

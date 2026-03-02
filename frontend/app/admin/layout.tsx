@@ -8,16 +8,23 @@ import {
   LayoutDashboard,
   Users,
   BarChart2,
+  Clock,
+  Tag,
+  Settings,
   LogOut,
   Menu,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import NotificationBell from "@/components/NotificationBell";
 
 const navItems = [
   { href: "/admin/dashboard", label: "Panel", icon: LayoutDashboard },
   { href: "/admin/users", label: "Trabajadores", icon: Users },
+  { href: "/admin/fichajes", label: "Fichajes", icon: Clock },
   { href: "/admin/reports", label: "Informes", icon: BarChart2 },
+  { href: "/admin/pause-types", label: "Tipos pausa", icon: Tag },
+  { href: "/admin/settings", label: "Configuración", icon: Settings },
 ];
 
 export default function AdminLayout({
@@ -93,11 +100,13 @@ export default function AdminLayout({
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="md:hidden bg-slate-900 text-white px-4 py-3 flex items-center gap-3">
-          <button onClick={() => setSidebarOpen(true)}>
+        <header className="bg-slate-900 text-white px-4 py-3 flex items-center gap-3">
+          <button className="md:hidden" onClick={() => setSidebarOpen(true)}>
             <Menu className="w-5 h-5" />
           </button>
-          <span className="font-semibold">Fichajes Admin</span>
+          <span className="font-semibold md:hidden">Fichajes Admin</span>
+          <div className="flex-1" />
+          <NotificationBell />
         </header>
 
         <main className="flex-1 p-4 md:p-8 overflow-auto">

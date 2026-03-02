@@ -107,3 +107,93 @@ async def test_get_history(client: AsyncClient, worker_user):
     resp = await client.get("/fichajes/me", headers=headers)
     assert resp.status_code == 200
     assert len(resp.json()) >= 1
+
+
+# ---------------------------------------------------------------------------
+# Admin endpoint tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_admin_list_fichajes(client: AsyncClient, admin_user, worker_user):
+    worker_token = await get_token(client, "worker@test.com", "Worker1234!")
+    await client.post("/fichajes/start", headers={"Authorization": f"Bearer {worker_token}"})
+
+    admin_token = await get_token(client, "admin@test.com", "Admin1234!")
+    resp = await client.get("/fichajes/admin", headers={"Authorization": f"Bearer {admin_token}"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) >= 1
+    assert "user" in data[0]
+    assert data[0]["user"]["email"] == "worker@test.com"
+
+
+@pytest.mark.asyncio
+async def test_admin_end_fichaje(client: AsyncClient, admin_user, worker_user):
+    worker_token = await get_token(client, "worker@test.com", "Worker1234!")
+    resp = await client.post("/fichajes/start", headers={"Authorization": f"Bearer {worker_token}"})
+    fichaje_id = resp.json()["id"]
+
+    admin_token = await get_token(client, "admin@test.com", "Admin1234!")
+    resp = await client.post(
+        f"/fichajes/admin/{fichaje_id}/end",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "finished"
+    assert data["end_time"] is not None
+    assert data["total_minutes"] is not None
+
+
+@pytest.mark.asyncio
+async def test_admin_edit_fichaje(client: AsyncClient, admin_user, worker_user):
+    worker_token = await get_token(client, "worker@test.com", "Worker1234!")
+    resp = await client.post("/fichajes/start", headers={"Authorization": f"Bearer {worker_token}"})
+    fichaje_id = resp.json()["id"]
+    await client.post("/fichajes/end", headers={"Authorization": f"Bearer {worker_token}"})
+
+    admin_token = await get_token(client, "admin@test.com", "Admin1234!")
+    resp = await client.patch(
+        f"/fichajes/admin/{fichaje_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"total_minutes": 120, "late_minutes": 5},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_minutes"] == 120
+    assert data["late_minutes"] == 5
+
+
+@pytest.mark.asyncio
+async def test_admin_delete_fichaje(client: AsyncClient, admin_user, worker_user):
+    worker_token = await get_token(client, "worker@test.com", "Worker1234!")
+    resp = await client.post("/fichajes/start", headers={"Authorization": f"Bearer {worker_token}"})
+    fichaje_id = resp.json()["id"]
+
+    admin_token = await get_token(client, "admin@test.com", "Admin1234!")
+    resp = await client.delete(
+        f"/fichajes/admin/{fichaje_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 204
+
+    # Confirm it no longer exists
+    resp = await client.get("/fichajes/admin", headers={"Authorization": f"Bearer {admin_token}"})
+    ids = [f["id"] for f in resp.json()]
+    assert fichaje_id not in ids
+
+
+@pytest.mark.asyncio
+async def test_non_admin_cannot_access_admin_endpoints(client: AsyncClient, worker_user):
+    token = await get_token(client, "worker@test.com", "Worker1234!")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp = await client.get("/fichajes/admin", headers=headers)
+    assert resp.status_code == 403
+
+    resp = await client.post("/fichajes/admin/00000000-0000-0000-0000-000000000000/end", headers=headers)
+    assert resp.status_code == 403
+
+    resp = await client.patch("/fichajes/admin/00000000-0000-0000-0000-000000000000", headers=headers, json={})
+    assert resp.status_code == 403
