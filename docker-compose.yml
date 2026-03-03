@@ -23,10 +23,10 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-fichajes}
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
-      CORS_ORIGINS: '["http://localhost:3000"]'
+      CORS_ORIGINS: ${CORS_ORIGINS:-'["http://localhost:3000"]'}
       APP_ENV: ${APP_ENV:-production}
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
 
   frontend:
     build:
@@ -36,8 +36,8 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
 
 volumes:
   pgdata:
