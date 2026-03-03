@@ -26,7 +26,7 @@ class LateAlert(BaseModel):
 
 @router.get("/late", response_model=list[LateAlert])
 async def get_late_alerts(
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
     # Check if alerts are enabled
@@ -41,12 +41,13 @@ async def get_late_alerts(
     from_dt = datetime.combine(today, datetime.min.time())
     to_dt = datetime.combine(today, datetime.max.time())
 
-    # All active workers that have a scheduled start time
+    # All active workers in admin's company that have a scheduled start time
     result = await session.execute(
         select(User).where(
             User.role == UserRole.worker,
             User.is_active == True,
             User.scheduled_start != None,
+            User.company_id == admin.company_id,
         )
     )
     workers = result.scalars().all()

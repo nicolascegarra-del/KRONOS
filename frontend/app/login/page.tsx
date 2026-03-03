@@ -27,7 +27,9 @@ export default function LoginPage() {
     try {
       await login(email, password);
       const user = useAuthStore.getState().user;
-      if (user?.role === "admin") {
+      if (user?.role === "superadmin") {
+        router.replace("/superadmin/dashboard");
+      } else if (user?.role === "admin") {
         router.replace("/admin/dashboard");
       } else {
         router.replace("/worker/dashboard");

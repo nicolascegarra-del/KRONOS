@@ -4,7 +4,7 @@ export interface AuthUser {
   id: string;
   email: string;
   full_name: string;
-  role: "admin" | "worker";
+  role: "superadmin" | "admin" | "worker";
   scheduled_start?: string;
 }
 

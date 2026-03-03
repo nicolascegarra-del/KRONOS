@@ -198,12 +198,14 @@ async def admin_list_fichajes(
     fichaje_status: Optional[FichajeStatus] = Query(default=None, alias="status"),
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
     query = (
         select(Fichaje)
+        .join(User, Fichaje.user_id == User.id)
         .options(selectinload(Fichaje.user), selectinload(Fichaje.pausas))
+        .where(User.company_id == admin.company_id)
         .order_by(Fichaje.start_time.desc())
     )
     if user_id:
@@ -221,13 +223,14 @@ async def admin_list_fichajes(
 @router.post("/admin/{fichaje_id}/end", response_model=FichajeRead)
 async def admin_end_fichaje(
     fichaje_id: UUID,
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
     result = await session.execute(
         select(Fichaje)
+        .join(User, Fichaje.user_id == User.id)
         .options(selectinload(Fichaje.pausas))
-        .where(Fichaje.id == fichaje_id)
+        .where(Fichaje.id == fichaje_id, User.company_id == admin.company_id)
     )
     fichaje = result.scalar_one_or_none()
     if not fichaje:
@@ -252,13 +255,14 @@ async def admin_end_fichaje(
 @router.delete("/admin/{fichaje_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def admin_delete_fichaje(
     fichaje_id: UUID,
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
     result = await session.execute(
         select(Fichaje)
+        .join(User, Fichaje.user_id == User.id)
         .options(selectinload(Fichaje.pausas))
-        .where(Fichaje.id == fichaje_id)
+        .where(Fichaje.id == fichaje_id, User.company_id == admin.company_id)
     )
     fichaje = result.scalar_one_or_none()
     if not fichaje:
@@ -274,13 +278,14 @@ async def admin_delete_fichaje(
 async def admin_edit_fichaje(
     fichaje_id: UUID,
     body: FichajeAdminUpdate,
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
     result = await session.execute(
         select(Fichaje)
+        .join(User, Fichaje.user_id == User.id)
         .options(selectinload(Fichaje.pausas))
-        .where(Fichaje.id == fichaje_id)
+        .where(Fichaje.id == fichaje_id, User.company_id == admin.company_id)
     )
     fichaje = result.scalar_one_or_none()
     if not fichaje:

@@ -1,5 +1,5 @@
 """
-Seed script: creates admin@test.com and worker@test.com if they don't exist,
+Seed script: creates superadmin, demo company, admin, and worker if they don't exist,
 and seeds the default pause types.
 Run via: python -m migrations.seed
 Or called automatically from lifespan in main.py.
@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlmodel import SQLModel
 
 from app.database import engine, AsyncSessionLocal
+from app.models.company import Company
 from app.models.user import User, UserRole
 from app.models.pausa_tipo import PausaTipo
 from app.services.auth import hash_password
@@ -25,13 +26,24 @@ DEFAULT_PAUSE_TYPES = [
     "Otros",
 ]
 
+DEMO_COMPANY = {"name": "Demo Company", "max_workers": 50}
+
 SEED_USERS = [
+    {
+        "email": "superadmin@test.com",
+        "full_name": "Super Admin",
+        "password": "Super1234!",
+        "role": UserRole.superadmin,
+        "scheduled_start": None,
+        "company": None,  # superadmin has no company
+    },
     {
         "email": "admin@test.com",
         "full_name": "Admin User",
         "password": "Admin1234!",
         "role": UserRole.admin,
         "scheduled_start": None,
+        "company": "demo",  # belongs to Demo Company
     },
     {
         "email": "worker@test.com",
@@ -39,6 +51,7 @@ SEED_USERS = [
         "password": "Worker1234!",
         "role": UserRole.worker,
         "scheduled_start": time(9, 0),
+        "company": "demo",  # belongs to Demo Company
     },
 ]
 
@@ -49,21 +62,46 @@ async def seed() -> None:
         await conn.run_sync(SQLModel.metadata.create_all)
 
     async with AsyncSessionLocal() as session:
+        # Ensure Demo Company exists
+        result = await session.execute(
+            select(Company).where(Company.name == DEMO_COMPANY["name"])
+        )
+        demo_company = result.scalar_one_or_none()
+        if not demo_company:
+            demo_company = Company(
+                name=DEMO_COMPANY["name"],
+                max_workers=DEMO_COMPANY["max_workers"],
+            )
+            session.add(demo_company)
+            await session.flush()
+            print(f"[seed] Created company: {DEMO_COMPANY['name']}")
+        else:
+            print(f"[seed] Company '{DEMO_COMPANY['name']}' already exists, skipping.")
+
+        # Seed users
         for data in SEED_USERS:
             result = await session.execute(
                 select(User).where(User.email == data["email"])
             )
             existing = result.scalar_one_or_none()
             if existing:
-                print(f"[seed] User {data['email']} already exists, skipping.")
+                # Assign company if missing (migration helper for existing installations)
+                if existing.company_id is None and data["company"] == "demo":
+                    existing.company_id = demo_company.id
+                    session.add(existing)
+                    print(f"[seed] Assigned company to existing user: {data['email']}")
+                else:
+                    print(f"[seed] User {data['email']} already exists, skipping.")
                 continue
 
+            company_id = demo_company.id if data["company"] == "demo" else None
             user = User(
                 email=data["email"],
                 full_name=data["full_name"],
                 hashed_password=hash_password(data["password"]),
                 role=data["role"],
                 scheduled_start=data["scheduled_start"],
+                company_id=company_id,
             )
             session.add(user)
             print(f"[seed] Created user: {data['email']}")
