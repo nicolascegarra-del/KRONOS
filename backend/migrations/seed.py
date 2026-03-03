@@ -7,7 +7,7 @@ Or called automatically from lifespan in main.py.
 import asyncio
 from datetime import time
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlmodel import SQLModel
 
 from app.database import engine, AsyncSessionLocal
@@ -43,7 +43,7 @@ SEED_USERS = [
         "password": "Admin1234!",
         "role": UserRole.admin,
         "scheduled_start": None,
-        "company": "demo",  # belongs to Demo Company
+        "company": "demo",
     },
     {
         "email": "worker@test.com",
@@ -51,15 +51,28 @@ SEED_USERS = [
         "password": "Worker1234!",
         "role": UserRole.worker,
         "scheduled_start": time(9, 0),
-        "company": "demo",  # belongs to Demo Company
+        "company": "demo",
     },
 ]
 
 
-async def seed() -> None:
-    # Create tables
+async def run_migrations() -> None:
+    """Apply schema changes to existing tables that create_all won't touch."""
     async with engine.begin() as conn:
+        # 1. Create any brand-new tables (company, etc.) — skips existing ones
         await conn.run_sync(SQLModel.metadata.create_all)
+
+        # 2. Add company_id column to user table if it doesn't exist yet
+        await conn.execute(text("""
+            ALTER TABLE "user"
+            ADD COLUMN IF NOT EXISTS company_id UUID
+            REFERENCES company(id)
+        """))
+        print("[migrate] Schema up to date.")
+
+
+async def seed() -> None:
+    await run_migrations()
 
     async with AsyncSessionLocal() as session:
         # Ensure Demo Company exists
