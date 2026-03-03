@@ -13,7 +13,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Clock } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -44,10 +43,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
       <Card className="w-full max-w-sm shadow-lg">
         <CardHeader className="text-center">
-          <div className="flex justify-center mb-2">
-            <div className="bg-primary rounded-full p-3">
-              <Clock className="w-8 h-8 text-white" />
-            </div>
+          <div className="flex justify-center mb-4">
+            <img src="/logo.png" alt="Logo" className="h-16 w-auto" />
           </div>
           <CardTitle className="text-2xl">Fichajes</CardTitle>
           <CardDescription>Inicia sesión para continuar</CardDescription>
