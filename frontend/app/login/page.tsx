@@ -46,7 +46,6 @@ export default function LoginPage() {
           <div className="flex justify-center mb-4">
             <img src="/logo.png" alt="Logo" className="h-16 w-auto" />
           </div>
-          <CardTitle className="text-2xl">Fichajes</CardTitle>
           <CardDescription>Inicia sesión para continuar</CardDescription>
         </CardHeader>
         <CardContent>
