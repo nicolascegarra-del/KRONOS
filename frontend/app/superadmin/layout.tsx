@@ -37,8 +37,8 @@ export default function SuperAdminLayout({
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         )}
       >
-        <div className="flex items-center justify-between px-4 py-4 border-b border-slate-700">
-          <span className="font-bold text-lg text-white">Menú</span>
+        <div className="flex items-center justify-between px-4 py-5 border-b border-slate-700">
+          <img src="/logo_kronos.png" alt="Kronos" className="h-12 w-auto max-w-[180px]" />
           <button className="md:hidden" onClick={() => setSidebarOpen(false)}>
             <X className="w-5 h-5" />
           </button>
@@ -89,8 +89,7 @@ export default function SuperAdminLayout({
           <button className="md:hidden" onClick={() => setSidebarOpen(true)}>
             <Menu className="w-5 h-5" />
           </button>
-          <img src="/logo_kronos.png" alt="Kronos" className="h-8 w-auto" />
-          <span className="text-xs text-slate-400 ml-1">Superadmin</span>
+          <img src="/logo_kronos.png" alt="Kronos" className="h-10 w-auto" />
         </header>
 
         <main className="flex-1 p-4 md:p-8 overflow-auto">
