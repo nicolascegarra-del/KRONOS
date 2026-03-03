@@ -44,7 +44,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm shadow-lg">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <img src="/logo.png" alt="Logo" className="h-16 w-auto" />
+            <img src="/logo.png" alt="Logo" className="w-[300px] h-auto" />
           </div>
           <CardDescription>Inicia sesión para continuar</CardDescription>
         </CardHeader>
