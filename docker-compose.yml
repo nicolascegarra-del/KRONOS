@@ -13,6 +13,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - default
 
   backend:
     build: ./backend
@@ -23,10 +25,19 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-fichajes}
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
-      CORS_ORIGINS: ${CORS_ORIGINS:-'["http://localhost:3000"]'}
+      CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3000"]}'
       APP_ENV: ${APP_ENV:-production}
     expose:
       - "8000"
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-fichajes}-backend.rule=Host(`${SERVICE_FQDN_BACKEND:-localhost}`)"
+      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-fichajes}-backend.entrypoints=https"
+      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-fichajes}-backend.tls=true"
+      - "traefik.http.services.${COOLIFY_RESOURCE_UUID:-fichajes}-backend.loadbalancer.server.port=8000"
+    networks:
+      - default
+      - coolify
 
   frontend:
     build:
@@ -38,6 +49,20 @@ services:
       - backend
     expose:
       - "3000"
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-fichajes}-frontend.rule=Host(`${SERVICE_FQDN_FRONTEND:-localhost}`)"
+      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-fichajes}-frontend.entrypoints=https"
+      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-fichajes}-frontend.tls=true"
+      - "traefik.http.services.${COOLIFY_RESOURCE_UUID:-fichajes}-frontend.loadbalancer.server.port=3000"
+    networks:
+      - default
+      - coolify
 
 volumes:
   pgdata:
+
+networks:
+  default:
+  coolify:
+    external: true
