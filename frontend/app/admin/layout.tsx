@@ -53,7 +53,7 @@ export default function AdminLayout({
         )}
       >
         <div className="flex items-center justify-between px-4 py-4 border-b border-slate-700">
-          <span className="font-bold text-lg">Fichajes Admin</span>
+          <img src="/logo.png" alt="Logo" className="h-8 w-auto" />
           <button className="md:hidden" onClick={() => setSidebarOpen(false)}>
             <X className="w-5 h-5" />
           </button>
@@ -104,7 +104,10 @@ export default function AdminLayout({
           <button className="md:hidden" onClick={() => setSidebarOpen(true)}>
             <Menu className="w-5 h-5" />
           </button>
-          <span className="font-semibold md:hidden">Fichajes Admin</span>
+          <img src="/logo.png" alt="Logo" className="h-8 w-auto" />
+          <p className="text-sm text-slate-200">
+            Bienvenido, <span className="font-semibold">{user?.full_name?.split(" ")[0] || user?.email}</span>
+          </p>
           <div className="flex-1" />
           <NotificationBell />
         </header>

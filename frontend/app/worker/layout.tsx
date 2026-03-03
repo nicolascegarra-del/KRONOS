@@ -30,9 +30,11 @@ export default function WorkerLayout({
     <div className="min-h-screen flex flex-col bg-slate-50">
       {/* Top header */}
       <header className="bg-slate-900 text-white px-4 py-3 flex items-center justify-between">
-        <div>
-          <p className="font-semibold text-sm">Fichajes</p>
-          <p className="text-xs text-slate-400">{user?.full_name || user?.email}</p>
+        <div className="flex items-center gap-3">
+          <img src="/logo.png" alt="Logo" className="h-8 w-auto" />
+          <p className="text-sm text-slate-200">
+            Bienvenido, <span className="font-semibold">{user?.full_name?.split(" ")[0] || user?.email}</span>
+          </p>
         </div>
         <button
           onClick={handleLogout}
