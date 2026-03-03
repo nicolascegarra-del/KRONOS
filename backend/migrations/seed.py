@@ -57,18 +57,37 @@ SEED_USERS = [
 
 
 async def run_migrations() -> None:
-    """Apply schema changes to existing tables that create_all won't touch."""
+    """
+    Apply schema changes to existing tables that create_all won't touch.
+    Safe to run multiple times (idempotent).
+    """
+    is_postgres = "postgresql" in str(engine.url)
+
+    if is_postgres:
+        # PostgreSQL stores Python enums as native ENUM types.
+        # ALTER TYPE ... ADD VALUE cannot run inside a transaction,
+        # so we use AUTOCOMMIT isolation level.
+        async with engine.connect() as conn:
+            await conn.execution_options(isolation_level="AUTOCOMMIT")
+            await conn.execute(
+                text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'superadmin'")
+            )
+            print("[migrate] userrole enum updated.")
+
+    # Create new tables (company, etc.) — skips tables that already exist
     async with engine.begin() as conn:
-        # 1. Create any brand-new tables (company, etc.) — skips existing ones
         await conn.run_sync(SQLModel.metadata.create_all)
 
-        # 2. Add company_id column to user table if it doesn't exist yet
-        await conn.execute(text("""
-            ALTER TABLE "user"
-            ADD COLUMN IF NOT EXISTS company_id UUID
-            REFERENCES company(id)
-        """))
-        print("[migrate] Schema up to date.")
+    if is_postgres:
+        # Add company_id FK column to user table if missing
+        async with engine.begin() as conn:
+            await conn.execute(text("""
+                ALTER TABLE "user"
+                ADD COLUMN IF NOT EXISTS company_id UUID
+                REFERENCES company(id)
+            """))
+
+    print("[migrate] Schema up to date.")
 
 
 async def seed() -> None:
@@ -98,7 +117,7 @@ async def seed() -> None:
             )
             existing = result.scalar_one_or_none()
             if existing:
-                # Assign company if missing (migration helper for existing installations)
+                # Assign company if missing (migration helper for existing installs)
                 if existing.company_id is None and data["company"] == "demo":
                     existing.company_id = demo_company.id
                     session.add(existing)
