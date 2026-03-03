@@ -53,7 +53,7 @@ export default function AdminLayout({
         )}
       >
         <div className="flex items-center justify-between px-4 py-4 border-b border-slate-700">
-          <img src="/logo.png" alt="Logo" className="h-8 w-auto" />
+          <span className="font-bold text-lg text-white">Menú</span>
           <button className="md:hidden" onClick={() => setSidebarOpen(false)}>
             <X className="w-5 h-5" />
           </button>
