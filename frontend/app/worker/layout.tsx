@@ -30,12 +30,7 @@ export default function WorkerLayout({
     <div className="min-h-screen flex flex-col bg-slate-50">
       {/* Top header */}
       <header className="bg-slate-900 text-white px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <img src="/logo_kronos.png" alt="Kronos" className="h-8 w-auto" />
-          <p className="text-sm text-slate-200">
-            Bienvenido, <span className="font-semibold">{user?.full_name?.split(" ")[0] || user?.email}</span>
-          </p>
-        </div>
+        <img src="/logo_kronos.png" alt="Kronos" className="h-8 w-auto" />
         <button
           onClick={handleLogout}
           className="p-2 hover:bg-slate-700 rounded-md transition-colors"

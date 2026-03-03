@@ -105,9 +105,6 @@ export default function AdminLayout({
             <Menu className="w-5 h-5" />
           </button>
           <img src="/logo_kronos.png" alt="Kronos" className="h-8 w-auto" />
-          <p className="text-sm text-slate-200">
-            Bienvenido, <span className="font-semibold">{user?.full_name?.split(" ")[0] || user?.email}</span>
-          </p>
           <div className="flex-1" />
           <NotificationBell />
         </header>
