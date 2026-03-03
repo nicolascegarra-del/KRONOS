@@ -327,14 +327,14 @@ export default function CompaniesPage() {
               {deleteError}
             </p>
           )}
-          <DialogFooter>
+          <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>
               Cancelar
             </Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleteLoading}>
               {deleteLoading ? "Eliminando..." : "Eliminar"}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
