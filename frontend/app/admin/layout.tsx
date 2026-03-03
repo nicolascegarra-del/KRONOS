@@ -104,7 +104,7 @@ export default function AdminLayout({
           <button className="md:hidden" onClick={() => setSidebarOpen(true)}>
             <Menu className="w-5 h-5" />
           </button>
-          <img src="/logo.png" alt="Logo" className="h-8 w-auto" />
+          <img src="/logo_kronos.png" alt="Kronos" className="h-8 w-auto" />
           <p className="text-sm text-slate-200">
             Bienvenido, <span className="font-semibold">{user?.full_name?.split(" ")[0] || user?.email}</span>
           </p>

@@ -31,7 +31,7 @@ export default function WorkerLayout({
       {/* Top header */}
       <header className="bg-slate-900 text-white px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="Logo" className="h-8 w-auto" />
+          <img src="/logo_kronos.png" alt="Kronos" className="h-8 w-auto" />
           <p className="text-sm text-slate-200">
             Bienvenido, <span className="font-semibold">{user?.full_name?.split(" ")[0] || user?.email}</span>
           </p>
