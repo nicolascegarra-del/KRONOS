@@ -29,6 +29,14 @@ services:
       APP_ENV: ${APP_ENV:-production}
     expose:
       - "8000"
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.kronos-backend-https.rule=Host(`${SERVICE_FQDN_BACKEND}`)"
+      - traefik.http.routers.kronos-backend-https.entrypoints=https
+      - traefik.http.routers.kronos-backend-https.tls=true
+      - traefik.http.routers.kronos-backend-https.tls.certresolver=letsencrypt
+      - traefik.http.routers.kronos-backend-https.service=kronos-backend
+      - traefik.http.services.kronos-backend.loadbalancer.server.port=8000
     networks:
       - default
       - coolify
@@ -43,6 +51,14 @@ services:
       - backend
     expose:
       - "3000"
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.kronos-frontend-https.rule=Host(`${SERVICE_FQDN_FRONTEND}`)"
+      - traefik.http.routers.kronos-frontend-https.entrypoints=https
+      - traefik.http.routers.kronos-frontend-https.tls=true
+      - traefik.http.routers.kronos-frontend-https.tls.certresolver=letsencrypt
+      - traefik.http.routers.kronos-frontend-https.service=kronos-frontend
+      - traefik.http.services.kronos-frontend.loadbalancer.server.port=3000
     networks:
       - default
       - coolify
