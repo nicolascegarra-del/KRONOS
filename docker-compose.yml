@@ -29,12 +29,6 @@ services:
       APP_ENV: ${APP_ENV:-production}
     expose:
       - "8000"
-    labels:
-      - traefik.enable=true
-      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-fichajes}-backend.rule=Host(`${SERVICE_FQDN_BACKEND:-localhost}`)"
-      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-fichajes}-backend.entrypoints=https"
-      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-fichajes}-backend.tls=true"
-      - "traefik.http.services.${COOLIFY_RESOURCE_UUID:-fichajes}-backend.loadbalancer.server.port=8000"
     networks:
       - default
       - coolify
@@ -49,12 +43,6 @@ services:
       - backend
     expose:
       - "3000"
-    labels:
-      - traefik.enable=true
-      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-fichajes}-frontend.rule=Host(`${SERVICE_FQDN_FRONTEND:-localhost}`)"
-      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-fichajes}-frontend.entrypoints=https"
-      - "traefik.http.routers.${COOLIFY_RESOURCE_UUID:-fichajes}-frontend.tls=true"
-      - "traefik.http.services.${COOLIFY_RESOURCE_UUID:-fichajes}-frontend.loadbalancer.server.port=3000"
     networks:
       - default
       - coolify
