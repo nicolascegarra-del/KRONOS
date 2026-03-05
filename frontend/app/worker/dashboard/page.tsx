@@ -14,7 +14,7 @@ export default function WorkerDashboard() {
     <div className="flex flex-col items-center px-4 py-8 gap-6">
       <div className="text-center">
         <h1 className="text-xl font-semibold text-slate-900">
-          Hola, {user?.full_name?.split(" ")[0] || "trabajador"}
+          Hola, {user?.full_name || "trabajador"}
         </h1>
         <p className="text-sm text-muted-foreground capitalize">{today}</p>
       </div>

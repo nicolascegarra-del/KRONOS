@@ -11,6 +11,7 @@ from sqlmodel import SQLModel
 
 from app.main import app
 from app.database import get_session
+from app.models.company import Company
 from app.models.user import User, UserRole
 from app.services.auth import hash_password
 
@@ -41,7 +42,12 @@ async def setup_db():
 
 @pytest_asyncio.fixture
 async def session(setup_db) -> AsyncGenerator[AsyncSession, None]:
+    """Clean all tables before each test so every test starts with a fresh DB."""
     async with TestSessionLocal() as s:
+        # Wipe data in reverse-dependency order (children first)
+        for table in reversed(SQLModel.metadata.sorted_tables):
+            await s.execute(table.delete())
+        await s.commit()
         yield s
         await s.rollback()
 
@@ -60,12 +66,21 @@ async def client(session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 
 
 @pytest_asyncio.fixture
-async def admin_user(session: AsyncSession) -> User:
+async def company(session: AsyncSession) -> Company:
+    c = Company(name="Test Company", max_workers=10)
+    session.add(c)
+    await session.commit()
+    await session.refresh(c)
+    return c
+
+
+@pytest_asyncio.fixture
+async def superadmin_user(session: AsyncSession) -> User:
     user = User(
-        email="admin@test.com",
-        full_name="Admin User",
-        hashed_password=hash_password("Admin1234!"),
-        role=UserRole.admin,
+        email="superadmin@test.com",
+        full_name="Super Admin",
+        hashed_password=hash_password("Super1234!"),
+        role=UserRole.superadmin,
     )
     session.add(user)
     await session.commit()
@@ -74,13 +89,29 @@ async def admin_user(session: AsyncSession) -> User:
 
 
 @pytest_asyncio.fixture
-async def worker_user(session: AsyncSession) -> User:
+async def admin_user(session: AsyncSession, company: Company) -> User:
+    user = User(
+        email="admin@test.com",
+        full_name="Admin User",
+        hashed_password=hash_password("Admin1234!"),
+        role=UserRole.admin,
+        company_id=company.id,
+    )
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
+async def worker_user(session: AsyncSession, company: Company) -> User:
     user = User(
         email="worker@test.com",
         full_name="Worker User",
         hashed_password=hash_password("Worker1234!"),
         role=UserRole.worker,
         scheduled_start=time(9, 0),
+        company_id=company.id,
     )
     session.add(user)
     await session.commit()

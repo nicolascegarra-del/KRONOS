@@ -25,6 +25,11 @@ class Fichaje(SQLModel, table=True):
     status: FichajeStatus = Field(default=FichajeStatus.active)
     total_minutes: Optional[int] = None   # computed on end
     late_minutes: Optional[int] = None    # minutes after scheduled_start
+    start_lat: Optional[float] = None
+    start_lng: Optional[float] = None
+    end_lat: Optional[float] = None
+    end_lng: Optional[float] = None
+    out_of_range: Optional[bool] = None  # None = no check, True = outside work center
 
     user: Optional["User"] = Relationship(back_populates="fichajes")
     pausas: List["Pausa"] = Relationship(back_populates="fichaje")

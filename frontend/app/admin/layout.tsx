@@ -8,16 +8,25 @@ import {
   LayoutDashboard,
   Users,
   BarChart2,
+  Clock,
+  Tag,
+  Settings,
   LogOut,
   Menu,
   X,
+  MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import NotificationBell from "@/components/NotificationBell";
 
 const navItems = [
   { href: "/admin/dashboard", label: "Panel", icon: LayoutDashboard },
   { href: "/admin/users", label: "Trabajadores", icon: Users },
+  { href: "/admin/fichajes", label: "Fichajes", icon: Clock },
   { href: "/admin/reports", label: "Informes", icon: BarChart2 },
+  { href: "/admin/work-centers", label: "Centros trabajo", icon: MapPin },
+  { href: "/admin/pause-types", label: "Tipos pausa", icon: Tag },
+  { href: "/admin/settings", label: "Configuración", icon: Settings },
 ];
 
 export default function AdminLayout({
@@ -45,8 +54,8 @@ export default function AdminLayout({
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         )}
       >
-        <div className="flex items-center justify-between px-4 py-4 border-b border-slate-700">
-          <span className="font-bold text-lg">Fichajes Admin</span>
+        <div className="flex items-center justify-between px-4 py-5 border-b border-slate-700">
+          <img src="/logo_kronos.png" alt="Kronos" className="h-12 w-auto max-w-[180px]" />
           <button className="md:hidden" onClick={() => setSidebarOpen(false)}>
             <X className="w-5 h-5" />
           </button>
@@ -93,11 +102,13 @@ export default function AdminLayout({
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="md:hidden bg-slate-900 text-white px-4 py-3 flex items-center gap-3">
-          <button onClick={() => setSidebarOpen(true)}>
+        <header className="bg-slate-900 text-white px-4 py-3 flex items-center gap-3">
+          <button className="md:hidden" onClick={() => setSidebarOpen(true)}>
             <Menu className="w-5 h-5" />
           </button>
-          <span className="font-semibold">Fichajes Admin</span>
+          <img src="/logo_kronos.png" alt="Kronos" className="h-10 w-auto" />
+          <div className="flex-1" />
+          <NotificationBell />
         </header>
 
         <main className="flex-1 p-4 md:p-8 overflow-auto">

@@ -15,5 +15,9 @@ class Pausa(SQLModel, table=True):
     start_time: datetime
     end_time: Optional[datetime] = None
     comment: str = Field(min_length=1)
+    start_lat: Optional[float] = None
+    start_lng: Optional[float] = None
+    end_lat: Optional[float] = None
+    end_lng: Optional[float] = None
 
     fichaje: Optional["Fichaje"] = Relationship(back_populates="pausas")

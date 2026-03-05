@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -22,7 +22,7 @@ async def hours_report(
     from_date: date = Query(..., description="Start date (inclusive)"),
     to_date: date = Query(..., description="End date (inclusive)"),
     session: AsyncSession = Depends(get_session),
-    _admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
 ):
     from_dt = datetime.combine(from_date, datetime.min.time())
     to_dt = datetime.combine(to_date, datetime.max.time())
@@ -30,11 +30,13 @@ async def hours_report(
     # Load all finished fichajes in range with their pausas and users
     result = await session.execute(
         select(Fichaje)
+        .join(User, Fichaje.user_id == User.id)
         .options(selectinload(Fichaje.pausas), selectinload(Fichaje.user))
         .where(
             Fichaje.start_time >= from_dt,
             Fichaje.start_time <= to_dt,
             Fichaje.status == FichajeStatus.finished,
+            User.company_id == admin.company_id,
         )
     )
     fichajes = result.scalars().all()
@@ -75,18 +77,20 @@ async def lateness_alerts(
     from_date: date = Query(...),
     to_date: date = Query(...),
     session: AsyncSession = Depends(get_session),
-    _admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
 ):
     from_dt = datetime.combine(from_date, datetime.min.time())
     to_dt = datetime.combine(to_date, datetime.max.time())
 
     result = await session.execute(
         select(Fichaje)
+        .join(User, Fichaje.user_id == User.id)
         .options(selectinload(Fichaje.user))
         .where(
             Fichaje.start_time >= from_dt,
             Fichaje.start_time <= to_dt,
             Fichaje.late_minutes > 0,
+            User.company_id == admin.company_id,
         )
         .order_by(Fichaje.start_time.desc())
     )

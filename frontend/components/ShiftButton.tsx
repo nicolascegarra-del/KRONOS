@@ -3,10 +3,18 @@
 import React, { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { getCurrentCoords } from "@/lib/geo";
 import { PauseDialog } from "./PauseDialog";
 import { Play, Square, Coffee, RotateCcw } from "lucide-react";
 
 type ShiftStatus = "idle" | "active" | "paused";
+
+interface Pausa {
+  id: string;
+  start_time: string;
+  end_time?: string;
+  comment: string;
+}
 
 interface Fichaje {
   id: string;
@@ -15,6 +23,28 @@ interface Fichaje {
   end_time?: string;
   total_minutes?: number;
   late_minutes?: number;
+  pausas: Pausa[];
+}
+
+/** Parse a naive UTC datetime string from the backend as UTC (appending "Z"). */
+function utcMs(iso: string): number {
+  return new Date(iso.endsWith("Z") ? iso : iso + "Z").getTime();
+}
+
+function computeElapsedSeconds(fichaje: Fichaje): number {
+  const startMs = utcMs(fichaje.start_time);
+  const completedPauseMs = fichaje.pausas
+    .filter((p) => p.end_time != null)
+    .reduce(
+      (acc, p) => acc + (utcMs(p.end_time!) - utcMs(p.start_time)),
+      0
+    );
+  if (fichaje.status === "paused") {
+    const openPause = fichaje.pausas.find((p) => p.end_time == null);
+    const freezeAt = openPause ? utcMs(openPause.start_time) : Date.now();
+    return Math.max(0, Math.floor((freezeAt - startMs - completedPauseMs) / 1000));
+  }
+  return Math.max(0, Math.floor((Date.now() - startMs - completedPauseMs) / 1000));
 }
 
 interface ShiftButtonProps {
@@ -41,20 +71,19 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
     });
   }, []);
 
-  // Update elapsed timer
+  // Update elapsed timer (pause-aware, freezes when paused)
   useEffect(() => {
     if (!fichaje || status === "idle") return;
-    const tick = () => {
-      const start = new Date(fichaje.start_time).getTime();
-      const now = Date.now();
-      const diff = Math.floor((now - start) / 1000);
-      const h = Math.floor(diff / 3600).toString().padStart(2, "0");
-      const m = Math.floor((diff % 3600) / 60).toString().padStart(2, "0");
-      const s = (diff % 60).toString().padStart(2, "0");
+    const render = () => {
+      const total = computeElapsedSeconds(fichaje);
+      const h = Math.floor(total / 3600).toString().padStart(2, "0");
+      const m = Math.floor((total % 3600) / 60).toString().padStart(2, "0");
+      const s = (total % 60).toString().padStart(2, "0");
       setElapsed(`${h}:${m}:${s}`);
     };
-    tick();
-    const id = setInterval(tick, 1000);
+    render();
+    if (status !== "active") return; // freeze when paused
+    const id = setInterval(render, 1000);
     return () => clearInterval(id);
   }, [fichaje, status]);
 
@@ -62,7 +91,8 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.post<Fichaje>("/fichajes/start");
+      const coords = await getCurrentCoords();
+      const res = await api.post<Fichaje>("/fichajes/start", { coords });
       setFichaje(res.data);
       setStatus("active");
       onStatusChange?.("active");
@@ -77,7 +107,8 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
     setLoading(true);
     setError(null);
     try {
-      await api.post("/fichajes/end");
+      const coords = await getCurrentCoords();
+      await api.post("/fichajes/end", { coords });
       setFichaje(null);
       setStatus("idle");
       setElapsed("00:00:00");
@@ -93,7 +124,8 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.post<Fichaje>("/fichajes/resume");
+      const coords = await getCurrentCoords();
+      const res = await api.post<Fichaje>("/fichajes/resume", { coords });
       setFichaje(res.data);
       setStatus("active");
       onStatusChange?.("active");
