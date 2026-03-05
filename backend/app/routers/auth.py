@@ -49,7 +49,7 @@ async def login(
             detail="Tu cuenta está desactivada",
         )
 
-    access_token = create_access_token(user.id, user.role)
+    access_token = create_access_token(user.id, user.role, user.full_name)
     refresh_token = create_refresh_token(user.id)
 
     response.set_cookie(
@@ -84,7 +84,7 @@ async def refresh(
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
-    new_access = create_access_token(user.id, user.role)
+    new_access = create_access_token(user.id, user.role, user.full_name)
     new_refresh = create_refresh_token(user.id)
 
     response.set_cookie(

@@ -24,7 +24,7 @@ export async function loginUser(email: string, password: string): Promise<AuthUs
   return {
     id: payload.sub,
     email,
-    full_name: "",
+    full_name: payload.full_name ?? "",
     role: payload.role,
   };
 }

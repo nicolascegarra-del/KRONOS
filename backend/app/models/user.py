@@ -8,6 +8,7 @@ from sqlmodel import SQLModel, Field, Relationship
 if TYPE_CHECKING:
     from app.models.fichaje import Fichaje
     from app.models.company import Company
+    from app.models.worker_schedule import WorkerSchedule
 
 
 class UserRole(str, Enum):
@@ -31,3 +32,4 @@ class User(SQLModel, table=True):
 
     fichajes: List["Fichaje"] = Relationship(back_populates="user")
     company: Optional["Company"] = Relationship(back_populates="users")
+    schedule: List["WorkerSchedule"] = Relationship(back_populates="user")

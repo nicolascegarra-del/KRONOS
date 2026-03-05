@@ -14,6 +14,7 @@ from app.database import engine, AsyncSessionLocal
 from app.models.company import Company
 from app.models.user import User, UserRole
 from app.models.pausa_tipo import PausaTipo
+from app.models.worker_schedule import WorkerSchedule  # noqa: F401 — ensures table is created
 from app.services.auth import hash_password
 
 
