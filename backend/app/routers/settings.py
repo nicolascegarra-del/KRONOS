@@ -24,7 +24,8 @@ async def get_app_settings(
     result = await session.execute(select(AppSettings).where(AppSettings.id == 1))
     settings = result.scalar_one_or_none()
     if not settings:
-        return AppSettingsRead(late_alert_enabled=False, late_alert_minutes=15)
+        return AppSettingsRead(late_alert_enabled=False, late_alert_minutes=15,
+                               auto_close_enabled=False, auto_close_hours=12)
     return settings
 
 
@@ -41,6 +42,8 @@ async def save_app_settings(
 
     settings.late_alert_enabled = body.late_alert_enabled
     settings.late_alert_minutes = body.late_alert_minutes
+    settings.auto_close_enabled = body.auto_close_enabled
+    settings.auto_close_hours = body.auto_close_hours
 
     session.add(settings)
     await session.commit()

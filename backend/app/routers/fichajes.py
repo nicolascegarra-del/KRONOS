@@ -377,3 +377,52 @@ async def admin_edit_fichaje(
     session.add(fichaje)
     await session.commit()
     return await _reload(session, fichaje.id)
+
+
+@router.post("/admin/close-all", status_code=status.HTTP_200_OK)
+async def admin_close_all_fichajes(
+    admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Close all active/paused shifts for the company immediately."""
+    closed = await _close_open_fichajes(session, company_id=admin.company_id)
+    return {"closed": closed}
+
+
+async def _close_open_fichajes(session: AsyncSession, company_id=None, max_hours: int = 0) -> int:
+    """
+    Close open fichajes.
+    - If company_id provided: only that company.
+    - If max_hours > 0: only fichajes open longer than max_hours hours.
+    Returns number of fichajes closed.
+    """
+    from datetime import timedelta
+
+    query = (
+        select(Fichaje)
+        .join(User, Fichaje.user_id == User.id)
+        .options(selectinload(Fichaje.pausas))
+        .where(Fichaje.status.in_([FichajeStatus.active, FichajeStatus.paused]))
+    )
+    if company_id is not None:
+        query = query.where(User.company_id == company_id)
+    if max_hours > 0:
+        cutoff = _now() - timedelta(hours=max_hours)
+        query = query.where(Fichaje.start_time <= cutoff)
+
+    result = await session.execute(query)
+    fichajes = result.scalars().all()
+
+    now = _now()
+    for fichaje in fichajes:
+        for p in fichaje.pausas:
+            if p.end_time is None:
+                p.end_time = now
+                session.add(p)
+        fichaje.end_time = now
+        fichaje.status = FichajeStatus.finished
+        fichaje.total_minutes = calculate_total_minutes(fichaje, fichaje.pausas)
+        session.add(fichaje)
+
+    await session.commit()
+    return len(fichajes)

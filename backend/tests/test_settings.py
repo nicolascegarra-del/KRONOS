@@ -62,6 +62,10 @@ async def test_admin_get_app_settings_defaults(client: AsyncClient, admin_user):
     data = resp.json()
     assert "late_alert_enabled" in data
     assert "late_alert_minutes" in data
+    assert "auto_close_enabled" in data
+    assert "auto_close_hours" in data
+    assert data["auto_close_enabled"] is False
+    assert data["auto_close_hours"] == 12
 
 
 @pytest.mark.asyncio
@@ -82,6 +86,43 @@ async def test_admin_save_app_settings(client: AsyncClient, admin_user):
     # GET reflects saved values
     resp2 = await client.get("/settings/app", headers=headers)
     assert resp2.json()["late_alert_minutes"] == 20
+
+
+@pytest.mark.asyncio
+async def test_admin_save_auto_close_settings(client: AsyncClient, admin_user):
+    token = await get_token(client, "admin@test.com", "Admin1234!")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp = await client.put(
+        "/settings/app",
+        headers=headers,
+        json={
+            "late_alert_enabled": False,
+            "late_alert_minutes": 15,
+            "auto_close_enabled": True,
+            "auto_close_hours": 8,
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["auto_close_enabled"] is True
+    assert data["auto_close_hours"] == 8
+
+    # GET reflects saved values
+    resp2 = await client.get("/settings/app", headers=headers)
+    assert resp2.json()["auto_close_enabled"] is True
+    assert resp2.json()["auto_close_hours"] == 8
+
+
+@pytest.mark.asyncio
+async def test_admin_save_auto_close_invalid_hours(client: AsyncClient, admin_user):
+    token = await get_token(client, "admin@test.com", "Admin1234!")
+    resp = await client.put(
+        "/settings/app",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"late_alert_enabled": False, "late_alert_minutes": 15, "auto_close_hours": 0},  # < 1 → invalid
+    )
+    assert resp.status_code == 422
 
 
 @pytest.mark.asyncio

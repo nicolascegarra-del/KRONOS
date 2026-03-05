@@ -197,3 +197,50 @@ async def test_non_admin_cannot_access_admin_endpoints(client: AsyncClient, work
 
     resp = await client.patch("/fichajes/admin/00000000-0000-0000-0000-000000000000", headers=headers, json={})
     assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_admin_close_all(client: AsyncClient, admin_user, worker_user):
+    """close-all endpoint closes all active shifts for the company."""
+    worker_token = await get_token(client, "worker@test.com", "Worker1234!")
+    await client.post("/fichajes/start", headers={"Authorization": f"Bearer {worker_token}"})
+
+    # Verify shift is active
+    resp = await client.get("/fichajes/active", headers={"Authorization": f"Bearer {worker_token}"})
+    assert resp.json()["status"] == "active"
+
+    admin_token = await get_token(client, "admin@test.com", "Admin1234!")
+    resp = await client.post(
+        "/fichajes/admin/close-all",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["closed"] >= 1
+
+    # Shift should now be finished
+    resp = await client.get("/fichajes/active", headers={"Authorization": f"Bearer {worker_token}"})
+    assert resp.json() is None
+
+
+@pytest.mark.asyncio
+async def test_admin_close_all_no_active_shifts(client: AsyncClient, admin_user, worker_user):
+    """close-all returns 0 when no active shifts exist."""
+    admin_token = await get_token(client, "admin@test.com", "Admin1234!")
+    resp = await client.post(
+        "/fichajes/admin/close-all",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["closed"] == 0
+
+
+@pytest.mark.asyncio
+async def test_worker_cannot_close_all(client: AsyncClient, worker_user):
+    """Workers cannot call the close-all endpoint."""
+    token = await get_token(client, "worker@test.com", "Worker1234!")
+    resp = await client.post(
+        "/fichajes/admin/close-all",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403

@@ -5,11 +5,13 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Send, Save, Bell } from "lucide-react";
+import { Send, Save, Bell, Clock, XCircle } from "lucide-react";
 
 interface AppSettings {
   late_alert_enabled: boolean;
   late_alert_minutes: number;
+  auto_close_enabled: boolean;
+  auto_close_hours: number;
 }
 
 interface EmailConfig {
@@ -48,6 +50,12 @@ export default function SettingsPage() {
   const [savingNotif, setSavingNotif] = useState(false);
   const [notifMsg, setNotifMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // Auto-close settings
+  const [autoCloseEnabled, setAutoCloseEnabled] = useState(false);
+  const [autoCloseHours, setAutoCloseHours] = useState(12);
+  const [closingAll, setClosingAll] = useState(false);
+  const [closeAllMsg, setCloseAllMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
   useEffect(() => {
     Promise.all([
       api.get<EmailConfig>("/settings/email"),
@@ -56,6 +64,8 @@ export default function SettingsPage() {
       setForm(emailRes.data);
       setNotifEnabled(appRes.data.late_alert_enabled);
       setNotifMinutes(appRes.data.late_alert_minutes);
+      setAutoCloseEnabled(appRes.data.auto_close_enabled);
+      setAutoCloseHours(appRes.data.auto_close_hours);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -105,12 +115,28 @@ export default function SettingsPage() {
       await api.put("/settings/app", {
         late_alert_enabled: notifEnabled,
         late_alert_minutes: notifMinutes,
+        auto_close_enabled: autoCloseEnabled,
+        auto_close_hours: autoCloseHours,
       });
       setNotifMsg({ ok: true, text: "Configuración de alertas guardada." });
     } catch (e: any) {
       setNotifMsg({ ok: false, text: e.response?.data?.detail || "Error al guardar" });
     } finally {
       setSavingNotif(false);
+    }
+  };
+
+  const handleCloseAll = async () => {
+    if (!confirm("¿Cerrar TODOS los fichajes activos ahora mismo? Esta acción no se puede deshacer.")) return;
+    setClosingAll(true);
+    setCloseAllMsg(null);
+    try {
+      const res = await api.post<{ closed: number }>("/fichajes/admin/close-all");
+      setCloseAllMsg({ ok: true, text: `${res.data.closed} fichaje(s) cerrado(s) correctamente.` });
+    } catch (e: any) {
+      setCloseAllMsg({ ok: false, text: e.response?.data?.detail || "Error al cerrar fichajes" });
+    } finally {
+      setClosingAll(false);
     }
   };
 
@@ -307,6 +333,80 @@ export default function SettingsPage() {
           <Save className="w-4 h-4" />
           {savingNotif ? "Guardando..." : "Guardar alertas"}
         </Button>
+      </div>
+
+      {/* Auto-close settings */}
+      <div className="bg-white border rounded-lg p-6 mt-6 space-y-4">
+        <h2 className="text-base font-semibold text-slate-700 border-b pb-2 flex items-center gap-2">
+          <Clock className="w-4 h-4" />
+          Cierre automático de fichajes
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          Cierra automáticamente los fichajes que lleven más de X horas abiertos. Se comprueba cada 5 minutos.
+        </p>
+
+        <div className="flex items-center gap-3">
+          <input
+            id="auto-close-enabled"
+            type="checkbox"
+            checked={autoCloseEnabled}
+            onChange={(e) => setAutoCloseEnabled(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-slate-900"
+          />
+          <Label htmlFor="auto-close-enabled">Activar cierre automático</Label>
+        </div>
+
+        {autoCloseEnabled && (
+          <div className="space-y-1">
+            <Label>Cerrar fichajes abiertos más de (horas)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={168}
+              value={autoCloseHours}
+              onChange={(e) => setAutoCloseHours(Number(e.target.value))}
+              className="w-32"
+            />
+            <p className="text-xs text-muted-foreground">
+              Los fichajes con más de {autoCloseHours} hora{autoCloseHours !== 1 ? "s" : ""} sin cerrar se finalizarán automáticamente.
+            </p>
+          </div>
+        )}
+
+        <Button
+          type="button"
+          onClick={handleSaveNotif}
+          disabled={savingNotif}
+          className="flex items-center gap-2"
+        >
+          <Save className="w-4 h-4" />
+          {savingNotif ? "Guardando..." : "Guardar cierre automático"}
+        </Button>
+
+        <div className="border-t pt-4 space-y-3">
+          <h3 className="text-sm font-medium text-slate-700 flex items-center gap-2">
+            <XCircle className="w-4 h-4 text-destructive" />
+            Cierre manual inmediato
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Cierra ahora mismo todos los fichajes activos o en pausa de tu empresa.
+          </p>
+          {closeAllMsg && (
+            <p className={`text-sm ${closeAllMsg.ok ? "text-green-600" : "text-destructive"}`}>
+              {closeAllMsg.text}
+            </p>
+          )}
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={handleCloseAll}
+            disabled={closingAll}
+            className="flex items-center gap-2"
+          >
+            <XCircle className="w-4 h-4" />
+            {closingAll ? "Cerrando..." : "Cerrar todos los fichajes ahora"}
+          </Button>
+        </div>
       </div>
     </div>
   );

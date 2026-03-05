@@ -11,8 +11,54 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
+import { Smartphone, ChevronDown, ChevronUp } from "lucide-react";
+
+function PwaInstructions() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-4 border rounded-lg overflow-hidden text-sm">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors text-slate-700 font-medium"
+      >
+        <span className="flex items-center gap-2">
+          <Smartphone className="w-4 h-4 text-primary" />
+          Añadir a la pantalla de inicio
+        </span>
+        {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+      </button>
+
+      {open && (
+        <div className="px-4 py-4 space-y-4 bg-white">
+          <div className="space-y-2">
+            <p className="font-semibold text-slate-800">🤖 Android (Chrome)</p>
+            <ol className="list-decimal list-inside space-y-1 text-slate-600 text-xs leading-relaxed">
+              <li>Abre esta página en <strong>Chrome</strong></li>
+              <li>Pulsa el menú <strong>⋮</strong> (tres puntos, arriba a la derecha)</li>
+              <li>Selecciona <strong>"Añadir a pantalla de inicio"</strong> o <strong>"Instalar app"</strong></li>
+              <li>Confirma pulsando <strong>"Añadir"</strong></li>
+            </ol>
+          </div>
+          <div className="border-t" />
+          <div className="space-y-2">
+            <p className="font-semibold text-slate-800">🍎 iPhone / iPad (Safari)</p>
+            <ol className="list-decimal list-inside space-y-1 text-slate-600 text-xs leading-relaxed">
+              <li>Abre esta página en <strong>Safari</strong> (no Chrome)</li>
+              <li>Pulsa el botón <strong>compartir</strong> <span className="inline-block border rounded px-1 font-mono">⎙</span> (abajo en el centro)</li>
+              <li>Desliza y selecciona <strong>"Añadir a pantalla de inicio"</strong></li>
+              <li>Escribe el nombre y pulsa <strong>"Añadir"</strong></li>
+            </ol>
+            <p className="text-xs text-muted-foreground">
+              Se creará un icono que abre la app a pantalla completa sin barra del navegador.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -95,6 +141,7 @@ export default function LoginPage() {
               {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
             </Button>
           </form>
+          <PwaInstructions />
         </CardContent>
       </Card>
     </div>

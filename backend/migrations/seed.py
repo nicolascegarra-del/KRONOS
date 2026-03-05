@@ -109,6 +109,15 @@ async def run_migrations() -> None:
                 ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS out_of_range BOOLEAN
             """))
 
+        # Add auto_close columns to app_settings if missing
+        async with engine.begin() as conn:
+            await conn.execute(text("""
+                ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS auto_close_enabled BOOLEAN DEFAULT FALSE
+            """))
+            await conn.execute(text("""
+                ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS auto_close_hours INTEGER DEFAULT 12
+            """))
+
     print("[migrate] Schema up to date.")
 
 
