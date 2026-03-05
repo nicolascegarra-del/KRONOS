@@ -27,9 +27,9 @@ def _create_token(data: dict, expires_delta: timedelta) -> str:
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def create_access_token(user_id: UUID, role: str, full_name: str = "") -> str:
+def create_access_token(user_id: UUID, role: str) -> str:
     return _create_token(
-        {"sub": str(user_id), "role": role, "full_name": full_name, "type": "access"},
+        {"sub": str(user_id), "role": role, "type": "access"},
         timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
 

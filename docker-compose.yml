@@ -13,8 +13,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    networks:
-      - default
 
   backend:
     build: ./backend
@@ -25,21 +23,10 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-fichajes}
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
-      CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3000"]}'
+      CORS_ORIGINS: '["http://localhost:3000"]'
       APP_ENV: ${APP_ENV:-production}
-    expose:
-      - "8000"
-    labels:
-      - traefik.enable=true
-      - "traefik.http.routers.kronos-backend-https.rule=Host(`${SERVICE_FQDN_BACKEND}`)"
-      - traefik.http.routers.kronos-backend-https.entrypoints=https
-      - traefik.http.routers.kronos-backend-https.tls=true
-      - traefik.http.routers.kronos-backend-https.tls.certresolver=letsencrypt
-      - traefik.http.routers.kronos-backend-https.service=kronos-backend
-      - traefik.http.services.kronos-backend.loadbalancer.server.port=8000
-    networks:
-      - default
-      - coolify
+    ports:
+      - "8000:8000"
 
   frontend:
     build:
@@ -49,24 +36,8 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
-    expose:
-      - "3000"
-    labels:
-      - traefik.enable=true
-      - "traefik.http.routers.kronos-frontend-https.rule=Host(`${SERVICE_FQDN_FRONTEND}`)"
-      - traefik.http.routers.kronos-frontend-https.entrypoints=https
-      - traefik.http.routers.kronos-frontend-https.tls=true
-      - traefik.http.routers.kronos-frontend-https.tls.certresolver=letsencrypt
-      - traefik.http.routers.kronos-frontend-https.service=kronos-frontend
-      - traefik.http.services.kronos-frontend.loadbalancer.server.port=3000
-    networks:
-      - default
-      - coolify
+    ports:
+      - "3000:3000"
 
 volumes:
   pgdata:
-
-networks:
-  default:
-  coolify:
-    external: true

@@ -31,25 +31,19 @@ async def login(
     result = await session.execute(select(User).where(User.email == body.email))
     user = result.scalar_one_or_none()
 
-    if not user:
+    if not user or not verify_password(body.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No existe ninguna cuenta con ese email",
-        )
-
-    if not verify_password(body.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Contraseña incorrecta",
+            detail="Invalid email or password",
         )
 
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tu cuenta está desactivada",
+            detail="Account is deactivated",
         )
 
-    access_token = create_access_token(user.id, user.role, user.full_name)
+    access_token = create_access_token(user.id, user.role)
     refresh_token = create_refresh_token(user.id)
 
     response.set_cookie(
@@ -84,7 +78,7 @@ async def refresh(
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
-    new_access = create_access_token(user.id, user.role, user.full_name)
+    new_access = create_access_token(user.id, user.role)
     new_refresh = create_refresh_token(user.id)
 
     response.set_cookie(

@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/card";
 import { Users, Clock, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
-import { es } from "date-fns/locale";
 
 interface User {
   role: "admin" | "worker";
@@ -60,7 +59,7 @@ export default function AdminDashboard() {
     <div>
       <h1 className="text-2xl font-bold mb-2">Panel de Control</h1>
       <p className="text-muted-foreground mb-6 capitalize">
-        {format(new Date(), "EEEE, d 'de' MMMM yyyy", { locale: es })}
+        {format(new Date(), "EEEE, d 'de' MMMM yyyy")}
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

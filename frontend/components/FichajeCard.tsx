@@ -4,7 +4,7 @@ import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDateTime, formatTime, minutesToHoursLabel } from "@/lib/utils";
-import { Clock, Coffee } from "lucide-react";
+import { Clock, Coffee, AlertCircle } from "lucide-react";
 
 interface Pausa {
   id: string;
@@ -77,6 +77,12 @@ export function FichajeCard({ fichaje }: FichajeCardProps) {
             </div>
           )}
 
+          {(fichaje.late_minutes ?? 0) > 0 && (
+            <div className="flex items-center gap-1 text-red-600">
+              <AlertCircle className="w-4 h-4" />
+              <span>{fichaje.late_minutes}min tarde</span>
+            </div>
+          )}
         </div>
 
         {/* Pauses detail */}

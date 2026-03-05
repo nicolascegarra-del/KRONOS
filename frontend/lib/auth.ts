@@ -4,7 +4,7 @@ export interface AuthUser {
   id: string;
   email: string;
   full_name: string;
-  role: "superadmin" | "admin" | "worker";
+  role: "admin" | "worker";
   scheduled_start?: string;
 }
 
@@ -24,7 +24,7 @@ export async function loginUser(email: string, password: string): Promise<AuthUs
   return {
     id: payload.sub,
     email,
-    full_name: payload.full_name ?? "",
+    full_name: "",
     role: payload.role,
   };
 }
