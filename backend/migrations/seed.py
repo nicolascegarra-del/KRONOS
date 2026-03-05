@@ -88,6 +88,20 @@ async def run_migrations() -> None:
                 REFERENCES company(id)
             """))
 
+        # Add geo columns to fichaje if missing
+        async with engine.begin() as conn:
+            for col in ("start_lat", "start_lng", "end_lat", "end_lng"):
+                await conn.execute(text(f"""
+                    ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS {col} DOUBLE PRECISION
+                """))
+
+        # Add geo columns to pausa if missing
+        async with engine.begin() as conn:
+            for col in ("start_lat", "start_lng", "end_lat", "end_lng"):
+                await conn.execute(text(f"""
+                    ALTER TABLE pausa ADD COLUMN IF NOT EXISTS {col} DOUBLE PRECISION
+                """))
+
     print("[migrate] Schema up to date.")
 
 

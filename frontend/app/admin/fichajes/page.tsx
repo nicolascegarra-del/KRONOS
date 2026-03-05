@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, Pencil, CheckCircle2, Trash2 } from "lucide-react";
+import { Search, Pencil, CheckCircle2, Trash2, MapPin } from "lucide-react";
 import { format } from "date-fns";
 import { minutesToHoursLabel } from "@/lib/utils";
 
@@ -20,6 +20,10 @@ interface PausaAdmin {
   start_time: string;
   end_time?: string;
   comment: string;
+  start_lat?: number;
+  start_lng?: number;
+  end_lat?: number;
+  end_lng?: number;
 }
 
 interface UserBasic {
@@ -37,7 +41,96 @@ interface FichajeAdmin {
   status: "active" | "paused" | "finished";
   total_minutes?: number;
   late_minutes?: number;
+  start_lat?: number;
+  start_lng?: number;
+  end_lat?: number;
+  end_lng?: number;
   pausas: PausaAdmin[];
+}
+
+interface GeoEvent {
+  label: string;
+  time: string;
+  lat: number;
+  lng: number;
+}
+
+function OsmMap({ lat, lng }: { lat: number; lng: number }) {
+  const delta = 0.003;
+  const bbox = `${lng - delta},${lat - delta},${lng + delta},${lat + delta}`;
+  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
+  return (
+    <iframe
+      src={src}
+      width="100%"
+      height="220"
+      className="rounded border"
+      loading="lazy"
+      title="Mapa ubicación"
+    />
+  );
+}
+
+function GeoModal({ fichaje, onClose }: { fichaje: FichajeAdmin; onClose: () => void }) {
+  const events: GeoEvent[] = [];
+
+  if (fichaje.start_lat != null && fichaje.start_lng != null) {
+    events.push({ label: "Inicio jornada", time: fichaje.start_time, lat: fichaje.start_lat, lng: fichaje.start_lng });
+  }
+  for (const p of fichaje.pausas) {
+    if (p.start_lat != null && p.start_lng != null) {
+      events.push({ label: `Pausa (${p.comment})`, time: p.start_time, lat: p.start_lat, lng: p.start_lng });
+    }
+    if (p.end_lat != null && p.end_lng != null && p.end_time) {
+      events.push({ label: `Reanuda (${p.comment})`, time: p.end_time, lat: p.end_lat, lng: p.end_lng });
+    }
+  }
+  if (fichaje.end_lat != null && fichaje.end_lng != null && fichaje.end_time) {
+    events.push({ label: "Fin jornada", time: fichaje.end_time, lat: fichaje.end_lat, lng: fichaje.end_lng });
+  }
+
+  const mapEvent = events[0] ?? null;
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-primary" />
+            Ubicaciones — {fichaje.user?.full_name ?? "Trabajador"}
+          </DialogTitle>
+        </DialogHeader>
+
+        {events.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">
+            No hay datos de geolocalización para este fichaje.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {mapEvent && <OsmMap lat={mapEvent.lat} lng={mapEvent.lng} />}
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {events.map((ev, i) => (
+                <div key={i} className="flex items-start justify-between text-sm border rounded px-3 py-2">
+                  <div>
+                    <p className="font-medium">{ev.label}</p>
+                    <p className="text-xs text-muted-foreground">{fmtDatetime(ev.time)}</p>
+                  </div>
+                  <a
+                    href={`https://www.openstreetmap.org/?mlat=${ev.lat}&mlon=${ev.lng}#map=17/${ev.lat}/${ev.lng}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary underline whitespace-nowrap ml-3 mt-0.5"
+                  >
+                    {ev.lat.toFixed(5)}, {ev.lng.toFixed(5)}
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 interface EditForm {
@@ -80,6 +173,7 @@ export default function AdminFichajesPage() {
   const [toDate, setToDate] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
+  const [geoTarget, setGeoTarget] = useState<FichajeAdmin | null>(null);
   const [editTarget, setEditTarget] = useState<FichajeAdmin | null>(null);
   const [editForm, setEditForm] = useState<EditForm>({
     start_time: "",
@@ -255,6 +349,15 @@ export default function AdminFichajesPage() {
                     <td className="p-3 text-right">{f.pausas.length}</td>
                     <td className="p-3">
                       <div className="flex items-center justify-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setGeoTarget(f)}
+                          className="flex items-center gap-1 text-xs"
+                          title="Ver ubicaciones"
+                        >
+                          <MapPin className="w-3 h-3" />
+                        </Button>
                         {(f.status === "active" || f.status === "paused") && (
                           <Button
                             size="sm"
@@ -293,6 +396,9 @@ export default function AdminFichajesPage() {
           </table>
         </div>
       </div>
+
+      {/* Geo modal */}
+      {geoTarget && <GeoModal fichaje={geoTarget} onClose={() => setGeoTarget(null)} />}
 
       {/* Edit dialog */}
       <Dialog open={editTarget != null} onOpenChange={(open) => !open && setEditTarget(null)}>

@@ -20,12 +20,34 @@ class PausaRead(BaseModel):
     start_time: datetime
     end_time: Optional[datetime] = None
     comment: str
+    start_lat: Optional[float] = None
+    start_lng: Optional[float] = None
+    end_lat: Optional[float] = None
+    end_lng: Optional[float] = None
 
     model_config = {"from_attributes": True}
 
 
+class GeoCoords(BaseModel):
+    lat: float
+    lng: float
+
+
 class PauseRequest(BaseModel):
     comment: str = Field(min_length=3)
+    coords: Optional[GeoCoords] = None
+
+
+class StartRequest(BaseModel):
+    coords: Optional[GeoCoords] = None
+
+
+class EndRequest(BaseModel):
+    coords: Optional[GeoCoords] = None
+
+
+class ResumeRequest(BaseModel):
+    coords: Optional[GeoCoords] = None
 
 
 class FichajeRead(BaseModel):
@@ -36,6 +58,10 @@ class FichajeRead(BaseModel):
     status: FichajeStatus
     total_minutes: Optional[int] = None
     late_minutes: Optional[int] = None
+    start_lat: Optional[float] = None
+    start_lng: Optional[float] = None
+    end_lat: Optional[float] = None
+    end_lng: Optional[float] = None
     pausas: List[PausaRead] = []
 
     model_config = {"from_attributes": True}

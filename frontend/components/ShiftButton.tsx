@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { getCurrentCoords } from "@/lib/geo";
 import { PauseDialog } from "./PauseDialog";
 import { Play, Square, Coffee, RotateCcw } from "lucide-react";
 
@@ -90,7 +91,8 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.post<Fichaje>("/fichajes/start");
+      const coords = await getCurrentCoords();
+      const res = await api.post<Fichaje>("/fichajes/start", { coords });
       setFichaje(res.data);
       setStatus("active");
       onStatusChange?.("active");
@@ -105,7 +107,8 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
     setLoading(true);
     setError(null);
     try {
-      await api.post("/fichajes/end");
+      const coords = await getCurrentCoords();
+      await api.post("/fichajes/end", { coords });
       setFichaje(null);
       setStatus("idle");
       setElapsed("00:00:00");
@@ -121,7 +124,8 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.post<Fichaje>("/fichajes/resume");
+      const coords = await getCurrentCoords();
+      const res = await api.post<Fichaje>("/fichajes/resume", { coords });
       setFichaje(res.data);
       setStatus("active");
       onStatusChange?.("active");

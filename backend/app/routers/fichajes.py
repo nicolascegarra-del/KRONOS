@@ -12,7 +12,10 @@ from app.dependencies import get_current_user, require_admin
 from app.models.fichaje import Fichaje, FichajeStatus
 from app.models.pausa import Pausa
 from app.models.user import User
-from app.schemas.fichaje import FichajeAdminRead, FichajeAdminUpdate, FichajeRead, PauseRequest
+from app.schemas.fichaje import (
+    FichajeAdminRead, FichajeAdminUpdate, FichajeRead,
+    PauseRequest, StartRequest, EndRequest, ResumeRequest,
+)
 from app.services.hours import calculate_total_minutes, calculate_late_minutes
 
 router = APIRouter(prefix="/fichajes", tags=["fichajes"])
@@ -54,6 +57,7 @@ async def _reload(session: AsyncSession, fichaje_id: UUID) -> Fichaje:
 
 @router.post("/start", response_model=FichajeRead, status_code=status.HTTP_201_CREATED)
 async def start_fichaje(
+    body: StartRequest = StartRequest(),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
@@ -68,6 +72,8 @@ async def start_fichaje(
         user_id=current_user.id,
         start_time=_now(),
         late_minutes=0,
+        start_lat=body.coords.lat if body.coords else None,
+        start_lng=body.coords.lng if body.coords else None,
     )
     session.add(fichaje)
     await session.flush()
@@ -80,6 +86,7 @@ async def start_fichaje(
 
 @router.post("/end", response_model=FichajeRead)
 async def end_fichaje(
+    body: EndRequest = EndRequest(),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
@@ -99,6 +106,8 @@ async def end_fichaje(
     fichaje.end_time = now
     fichaje.status = FichajeStatus.finished
     fichaje.total_minutes = calculate_total_minutes(fichaje, fichaje.pausas)
+    fichaje.end_lat = body.coords.lat if body.coords else None
+    fichaje.end_lng = body.coords.lng if body.coords else None
     session.add(fichaje)
     await session.commit()
     return await _reload(session, fichaje.id)
@@ -127,6 +136,8 @@ async def pause_fichaje(
         fichaje_id=fichaje.id,
         start_time=_now(),
         comment=body.comment,
+        start_lat=body.coords.lat if body.coords else None,
+        start_lng=body.coords.lng if body.coords else None,
     )
     session.add(pausa)
     fichaje.status = FichajeStatus.paused
@@ -137,6 +148,7 @@ async def pause_fichaje(
 
 @router.post("/resume", response_model=FichajeRead)
 async def resume_fichaje(
+    body: ResumeRequest = ResumeRequest(),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
@@ -157,6 +169,8 @@ async def resume_fichaje(
     for p in fichaje.pausas:
         if p.end_time is None:
             p.end_time = now
+            p.end_lat = body.coords.lat if body.coords else None
+            p.end_lng = body.coords.lng if body.coords else None
             session.add(p)
 
     fichaje.status = FichajeStatus.active

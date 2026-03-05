@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
+import { getCurrentCoords } from "@/lib/geo";
 
 interface PausaTipo {
   id: string;
@@ -46,7 +47,8 @@ export function PauseDialog({ open, onOpenChange, onSuccess }: PauseDialogProps)
     setLoading(true);
     setError(null);
     try {
-      const res = await api.post("/fichajes/pause", { comment: selected });
+      const coords = await getCurrentCoords();
+      const res = await api.post("/fichajes/pause", { comment: selected, coords });
       onSuccess(res.data);
     } catch (e: any) {
       setError(e.response?.data?.detail || "Error al pausar");
