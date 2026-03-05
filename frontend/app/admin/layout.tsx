@@ -14,6 +14,7 @@ import {
   LogOut,
   Menu,
   X,
+  MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import NotificationBell from "@/components/NotificationBell";
@@ -23,6 +24,7 @@ const navItems = [
   { href: "/admin/users", label: "Trabajadores", icon: Users },
   { href: "/admin/fichajes", label: "Fichajes", icon: Clock },
   { href: "/admin/reports", label: "Informes", icon: BarChart2 },
+  { href: "/admin/work-centers", label: "Centros trabajo", icon: MapPin },
   { href: "/admin/pause-types", label: "Tipos pausa", icon: Tag },
   { href: "/admin/settings", label: "Configuración", icon: Settings },
 ];

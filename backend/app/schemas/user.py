@@ -21,6 +21,16 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class SuperadminUserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = None
+    password: Optional[str] = None
+    role: Optional[UserRole] = None
+    scheduled_start: Optional[time] = None
+    is_active: Optional[bool] = None
+    company_id: Optional[UUID] = None
+
+
 class UserRead(BaseModel):
     id: UUID
     email: str
@@ -29,5 +39,6 @@ class UserRead(BaseModel):
     is_active: bool
     scheduled_start: Optional[time] = None
     created_at: datetime
+    company_id: Optional[UUID] = None
 
     model_config = {"from_attributes": True}

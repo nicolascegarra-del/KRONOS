@@ -4,12 +4,13 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
-import { LayoutDashboard, Building2, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, Building2, Users, LogOut, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/superadmin/dashboard", label: "Panel", icon: LayoutDashboard },
   { href: "/superadmin/companies", label: "Empresas", icon: Building2 },
+  { href: "/superadmin/users", label: "Usuarios", icon: Users },
 ];
 
 export default function SuperAdminLayout({

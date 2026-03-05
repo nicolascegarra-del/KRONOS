@@ -45,6 +45,7 @@ interface FichajeAdmin {
   start_lng?: number;
   end_lat?: number;
   end_lng?: number;
+  out_of_range?: boolean;
   pausas: PausaAdmin[];
 }
 
@@ -89,7 +90,8 @@ function GeoModal({ fichaje, onClose }: { fichaje: FichajeAdmin; onClose: () => 
     events.push({ label: "Fin jornada", time: fichaje.end_time, lat: fichaje.end_lat, lng: fichaje.end_lng });
   }
 
-  const mapEvent = events[0] ?? null;
+  const [selectedIdx, setSelectedIdx] = React.useState(0);
+  const mapEvent = events[selectedIdx] ?? events[0] ?? null;
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -110,7 +112,14 @@ function GeoModal({ fichaje, onClose }: { fichaje: FichajeAdmin; onClose: () => 
             {mapEvent && <OsmMap lat={mapEvent.lat} lng={mapEvent.lng} />}
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {events.map((ev, i) => (
-                <div key={i} className="flex items-start justify-between text-sm border rounded px-3 py-2">
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setSelectedIdx(i)}
+                  className={`w-full flex items-start justify-between text-sm border rounded px-3 py-2 text-left transition-colors ${
+                    i === selectedIdx ? "border-primary bg-primary/5" : "hover:bg-slate-50"
+                  }`}
+                >
                   <div>
                     <p className="font-medium">{ev.label}</p>
                     <p className="text-xs text-muted-foreground">{fmtDatetime(ev.time)}</p>
@@ -119,11 +128,12 @@ function GeoModal({ fichaje, onClose }: { fichaje: FichajeAdmin; onClose: () => 
                     href={`https://www.openstreetmap.org/?mlat=${ev.lat}&mlon=${ev.lng}#map=17/${ev.lat}/${ev.lng}`}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
                     className="text-xs text-primary underline whitespace-nowrap ml-3 mt-0.5"
                   >
                     {ev.lat.toFixed(5)}, {ev.lng.toFixed(5)}
                   </a>
-                </div>
+                </button>
               ))}
             </div>
           </div>
@@ -344,7 +354,14 @@ export default function AdminFichajesPage() {
                       {f.total_minutes != null ? minutesToHoursLabel(f.total_minutes) : "—"}
                     </td>
                     <td className="p-3 text-center">
-                      <StatusBadge s={f.status} />
+                      <div className="flex flex-col items-center gap-1">
+                        <StatusBadge s={f.status} />
+                        {f.out_of_range && (
+                          <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 whitespace-nowrap">
+                            Fuera de rango
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-3 text-right">{f.pausas.length}</td>
                     <td className="p-3">

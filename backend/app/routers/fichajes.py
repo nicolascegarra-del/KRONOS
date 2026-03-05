@@ -1,3 +1,4 @@
+import asyncio
 from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
@@ -9,13 +10,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.dependencies import get_current_user, require_admin
+from app.models.email_config import EmailConfig
 from app.models.fichaje import Fichaje, FichajeStatus
 from app.models.pausa import Pausa
-from app.models.user import User
+from app.models.user import User, UserRole
+from app.models.work_center import WorkCenter
 from app.schemas.fichaje import (
     FichajeAdminRead, FichajeAdminUpdate, FichajeRead,
     PauseRequest, StartRequest, EndRequest, ResumeRequest,
 )
+from app.services.geofence import is_within_any_work_center
 from app.services.hours import calculate_total_minutes, calculate_late_minutes
 
 router = APIRouter(prefix="/fichajes", tags=["fichajes"])
@@ -79,9 +83,55 @@ async def start_fichaje(
     await session.flush()
 
     fichaje.late_minutes = calculate_late_minutes(current_user, fichaje)
+
+    # Geofence check: if the company has work centers and coords are provided, check distance
+    if body.coords and current_user.company_id:
+        wc_result = await session.execute(
+            select(WorkCenter).where(WorkCenter.company_id == current_user.company_id)
+        )
+        work_centers = wc_result.scalars().all()
+        if work_centers:
+            in_range = is_within_any_work_center(body.coords.lat, body.coords.lng, work_centers)
+            fichaje.out_of_range = not in_range
+            if not in_range:
+                asyncio.create_task(_notify_out_of_range(current_user, session))
+
     session.add(fichaje)
     await session.commit()
     return await _reload(session, fichaje.id)
+
+
+async def _notify_out_of_range(worker: User, session: AsyncSession) -> None:
+    """Send an email to all company admins when a worker clocks in out of range."""
+    try:
+        from app.services.email_service import send_email
+        config_result = await session.execute(select(EmailConfig).where(EmailConfig.id == 1))
+        config = config_result.scalar_one_or_none()
+        if not config or not config.smtp_host:
+            return
+
+        admin_result = await session.execute(
+            select(User).where(
+                User.company_id == worker.company_id,
+                User.role == UserRole.admin,
+                User.is_active == True,
+            )
+        )
+        admins = admin_result.scalars().all()
+
+        subject = f"⚠️ Trabajador fuera de rango — {worker.full_name}"
+        body = f"""
+        <p>El trabajador <strong>{worker.full_name}</strong> ({worker.email}) ha fichado
+        su inicio de jornada fuera de los centros de trabajo configurados.</p>
+        <p>Revisa el panel de fichajes para más detalles.</p>
+        """
+        for admin in admins:
+            try:
+                await send_email(config, admin.email, subject, body)
+            except Exception:
+                pass
+    except Exception:
+        pass
 
 
 @router.post("/end", response_model=FichajeRead)
@@ -313,6 +363,8 @@ async def admin_edit_fichaje(
         fichaje.status = body.status
     if body.late_minutes is not None:
         fichaje.late_minutes = body.late_minutes
+    if body.out_of_range is not None:
+        fichaje.out_of_range = body.out_of_range
 
     # If total_minutes explicitly provided, use it; otherwise auto-recalculate
     # when start/end changed on a finished shift.

@@ -15,6 +15,7 @@ from app.models.company import Company
 from app.models.user import User, UserRole
 from app.models.pausa_tipo import PausaTipo
 from app.models.worker_schedule import WorkerSchedule  # noqa: F401 — ensures table is created
+from app.models.work_center import WorkCenter  # noqa: F401 — ensures table is created
 from app.services.auth import hash_password
 
 
@@ -101,6 +102,12 @@ async def run_migrations() -> None:
                 await conn.execute(text(f"""
                     ALTER TABLE pausa ADD COLUMN IF NOT EXISTS {col} DOUBLE PRECISION
                 """))
+
+        # Add out_of_range column to fichaje if missing
+        async with engine.begin() as conn:
+            await conn.execute(text("""
+                ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS out_of_range BOOLEAN
+            """))
 
     print("[migrate] Schema up to date.")
 

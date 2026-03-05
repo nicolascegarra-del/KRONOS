@@ -62,6 +62,7 @@ class FichajeRead(BaseModel):
     start_lng: Optional[float] = None
     end_lat: Optional[float] = None
     end_lng: Optional[float] = None
+    out_of_range: Optional[bool] = None
     pausas: List[PausaRead] = []
 
     model_config = {"from_attributes": True}
@@ -77,3 +78,4 @@ class FichajeAdminUpdate(BaseModel):
     status: Optional[FichajeStatus] = None
     total_minutes: Optional[int] = None
     late_minutes: Optional[int] = None
+    out_of_range: Optional[bool] = None

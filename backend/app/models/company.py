@@ -6,6 +6,7 @@ from sqlmodel import SQLModel, Field, Relationship
 
 if TYPE_CHECKING:
     from app.models.user import User
+    from app.models.work_center import WorkCenter
 
 
 class Company(SQLModel, table=True):
@@ -17,3 +18,4 @@ class Company(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     users: List["User"] = Relationship(back_populates="company")
+    work_centers: List["WorkCenter"] = Relationship(back_populates="company")

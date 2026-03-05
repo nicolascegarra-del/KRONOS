@@ -29,6 +29,7 @@ class Fichaje(SQLModel, table=True):
     start_lng: Optional[float] = None
     end_lat: Optional[float] = None
     end_lng: Optional[float] = None
+    out_of_range: Optional[bool] = None  # None = no check, True = outside work center
 
     user: Optional["User"] = Relationship(back_populates="fichajes")
     pausas: List["Pausa"] = Relationship(back_populates="fichaje")
