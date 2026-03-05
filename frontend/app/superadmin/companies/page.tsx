@@ -12,12 +12,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Building2, Pencil, Trash2, Plus } from "lucide-react";
+import { Building2, Pencil, Trash2, Plus, MapPin, MapPinOff } from "lucide-react";
 
 interface CompanyRead {
   id: string;
   name: string;
   max_workers: number;
+  geo_enabled: boolean;
   worker_count: number;
   created_at: string;
 }
@@ -33,6 +34,7 @@ interface CreateForm {
 interface EditForm {
   name: string;
   max_workers: number;
+  geo_enabled: boolean;
 }
 
 const emptyCreate: CreateForm = {
@@ -55,7 +57,7 @@ export default function CompaniesPage() {
 
   // Edit dialog
   const [editTarget, setEditTarget] = useState<CompanyRead | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({ name: "", max_workers: 10 });
+  const [editForm, setEditForm] = useState<EditForm>({ name: "", max_workers: 10, geo_enabled: true });
   const [editError, setEditError] = useState<string | null>(null);
   const [editLoading, setEditLoading] = useState(false);
 
@@ -97,7 +99,7 @@ export default function CompaniesPage() {
 
   const openEdit = (c: CompanyRead) => {
     setEditTarget(c);
-    setEditForm({ name: c.name, max_workers: c.max_workers });
+    setEditForm({ name: c.name, max_workers: c.max_workers, geo_enabled: c.geo_enabled });
     setEditError(null);
   };
 
@@ -164,6 +166,10 @@ export default function CompaniesPage() {
                         {c.worker_count} / {c.max_workers} trabajadores ·{" "}
                         Alta: {new Date(c.created_at).toLocaleDateString("es-ES")}
                       </p>
+                      <span className={`inline-flex items-center gap-1 text-xs mt-0.5 ${c.geo_enabled ? "text-green-600" : "text-slate-400"}`}>
+                        {c.geo_enabled ? <MapPin className="w-3 h-3" /> : <MapPinOff className="w-3 h-3" />}
+                        {c.geo_enabled ? "Geolocalización activa" : "Geolocalización desactivada"}
+                      </span>
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -294,6 +300,21 @@ export default function CompaniesPage() {
                 }
                 required
               />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <p className="text-sm font-medium">Geolocalización</p>
+                <p className="text-xs text-muted-foreground">
+                  Activa el control de presencia por GPS para los trabajadores de esta empresa.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditForm((f) => ({ ...f, geo_enabled: !f.geo_enabled }))}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editForm.geo_enabled ? "bg-primary" : "bg-slate-200"}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${editForm.geo_enabled ? "translate-x-6" : "translate-x-1"}`} />
+              </button>
             </div>
             {editError && (
               <p className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded">

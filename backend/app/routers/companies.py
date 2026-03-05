@@ -39,6 +39,7 @@ async def list_companies(
                 id=c.id,
                 name=c.name,
                 max_workers=c.max_workers,
+                geo_enabled=c.geo_enabled,
                 worker_count=await _worker_count(session, c.id),
                 created_at=c.created_at,
             )
@@ -90,6 +91,7 @@ async def create_company(
         id=company.id,
         name=company.name,
         max_workers=company.max_workers,
+        geo_enabled=company.geo_enabled,
         worker_count=0,
         created_at=company.created_at,
     )
@@ -111,6 +113,8 @@ async def update_company(
         company.name = body.name
     if body.max_workers is not None:
         company.max_workers = body.max_workers
+    if body.geo_enabled is not None:
+        company.geo_enabled = body.geo_enabled
 
     session.add(company)
     await session.commit()
@@ -120,6 +124,7 @@ async def update_company(
         id=company.id,
         name=company.name,
         max_workers=company.max_workers,
+        geo_enabled=company.geo_enabled,
         worker_count=await _worker_count(session, company.id),
         created_at=company.created_at,
     )

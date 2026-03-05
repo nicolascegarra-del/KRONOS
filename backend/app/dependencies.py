@@ -45,6 +45,11 @@ async def require_admin(current_user: User = Depends(get_current_user)) -> User:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required",
         )
+    if current_user.company_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin account is not associated with a company. Contact a superadmin.",
+        )
     return current_user
 
 

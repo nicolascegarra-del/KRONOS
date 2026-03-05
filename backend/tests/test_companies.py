@@ -231,3 +231,83 @@ async def test_worker_count_in_company_list(
     assert resp.status_code == 200
     data = resp.json()
     assert data[0]["worker_count"] == 1  # only worker_user counts (not admin_user)
+
+
+@pytest.mark.asyncio
+async def test_company_has_geo_enabled_by_default(
+    client: AsyncClient, superadmin_user: User, company: Company
+):
+    """New companies have geo_enabled=True by default."""
+    token = await get_token(client, "superadmin@test.com", "Super1234!")
+    resp = await client.get("/companies", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    assert resp.json()[0]["geo_enabled"] is True
+
+
+@pytest.mark.asyncio
+async def test_superadmin_can_toggle_geo(
+    client: AsyncClient, superadmin_user: User, company: Company
+):
+    """Superadmin can disable and re-enable geolocation for a company."""
+    token = await get_token(client, "superadmin@test.com", "Super1234!")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp = await client.put(
+        f"/companies/{company.id}", headers=headers, json={"geo_enabled": False}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["geo_enabled"] is False
+
+    resp = await client.put(
+        f"/companies/{company.id}", headers=headers, json={"geo_enabled": True}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["geo_enabled"] is True
+
+
+@pytest.mark.asyncio
+async def test_admin_cannot_create_admin_role(client: AsyncClient, admin_user: User):
+    """Admin cannot create another admin — only workers allowed."""
+    token = await get_token(client, "admin@test.com", "Admin1234!")
+    resp = await client.post(
+        "/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "email": "newadmin@test.com",
+            "full_name": "New Admin",
+            "password": "Admin1234!",
+            "role": "admin",
+        },
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_admin_cannot_escalate_role(
+    client: AsyncClient, admin_user: User, worker_user: User
+):
+    """Admin cannot change a worker's role to admin."""
+    token = await get_token(client, "admin@test.com", "Admin1234!")
+    resp = await client.put(
+        f"/users/{worker_user.id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"role": "admin"},
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_superadmin_users_include_company_name(
+    client: AsyncClient, superadmin_user: User, admin_user: User, worker_user: User
+):
+    """Superadmin user list returns company_name for users that belong to a company."""
+    token = await get_token(client, "superadmin@test.com", "Super1234!")
+    resp = await client.get("/superadmin/users", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    users = resp.json()
+    admin_data = next(u for u in users if u["email"] == "admin@test.com")
+    worker_data = next(u for u in users if u["email"] == "worker@test.com")
+    sa_data = next(u for u in users if u["email"] == "superadmin@test.com")
+    assert admin_data["company_name"] == "Test Company"
+    assert worker_data["company_name"] == "Test Company"
+    assert sa_data["company_name"] is None

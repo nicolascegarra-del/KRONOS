@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.dependencies import get_current_user, require_admin
+from app.models.company import Company
 from app.models.email_config import EmailConfig
 from app.models.fichaje import Fichaje, FichajeStatus
 from app.models.pausa import Pausa
@@ -84,17 +85,22 @@ async def start_fichaje(
 
     fichaje.late_minutes = calculate_late_minutes(current_user, fichaje)
 
-    # Geofence check: if the company has work centers and coords are provided, check distance
+    # Geofence check: only if company has geo_enabled=True, work centers exist, and coords provided
     if body.coords and current_user.company_id:
-        wc_result = await session.execute(
-            select(WorkCenter).where(WorkCenter.company_id == current_user.company_id)
+        company_result = await session.execute(
+            select(Company).where(Company.id == current_user.company_id)
         )
-        work_centers = wc_result.scalars().all()
-        if work_centers:
-            in_range = is_within_any_work_center(body.coords.lat, body.coords.lng, work_centers)
-            fichaje.out_of_range = not in_range
-            if not in_range:
-                asyncio.create_task(_notify_out_of_range(current_user, session))
+        company_obj = company_result.scalar_one_or_none()
+        if company_obj and company_obj.geo_enabled:
+            wc_result = await session.execute(
+                select(WorkCenter).where(WorkCenter.company_id == current_user.company_id)
+            )
+            work_centers = wc_result.scalars().all()
+            if work_centers:
+                in_range = is_within_any_work_center(body.coords.lat, body.coords.lng, work_centers)
+                fichaje.out_of_range = not in_range
+                if not in_range:
+                    asyncio.create_task(_notify_out_of_range(current_user, session))
 
     session.add(fichaje)
     await session.commit()

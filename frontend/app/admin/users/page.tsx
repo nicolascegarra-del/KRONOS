@@ -28,7 +28,6 @@ interface UserFormData {
   email: string;
   full_name: string;
   password: string;
-  role: "admin" | "worker";
   scheduled_start: string;
 }
 
@@ -36,7 +35,6 @@ const emptyForm: UserFormData = {
   email: "",
   full_name: "",
   password: "",
-  role: "worker",
   scheduled_start: "",
 };
 
@@ -74,7 +72,6 @@ export default function UsersPage() {
       email: u.email,
       full_name: u.full_name,
       password: "",
-      role: u.role,
       scheduled_start: u.scheduled_start || "",
     });
     setError(null);
@@ -90,7 +87,6 @@ export default function UsersPage() {
       if (editUser) {
         await api.put(`/users/${editUser.id}`, {
           full_name: form.full_name,
-          role: form.role,
           scheduled_start: form.scheduled_start || null,
         });
       } else {
@@ -98,7 +94,6 @@ export default function UsersPage() {
           email: form.email,
           full_name: form.full_name,
           password: form.password,
-          role: form.role,
           scheduled_start: form.scheduled_start || null,
         });
       }

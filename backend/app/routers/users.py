@@ -46,6 +46,13 @@ async def create_user(
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(require_admin),
 ):
+    # Admins can only create workers — only superadmin can assign admin/superadmin roles
+    if body.role != UserRole.worker:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admins can only create workers. Use superadmin to assign admin/superadmin roles.",
+        )
+
     existing = await session.execute(select(User).where(User.email == body.email))
     if existing.scalar_one_or_none():
         raise HTTPException(
@@ -54,7 +61,7 @@ async def create_user(
         )
 
     # Enforce worker limit per company
-    if body.role == UserRole.worker and admin.company_id is not None:
+    if admin.company_id is not None:
         company_result = await session.execute(
             select(Company).where(Company.id == admin.company_id)
         )
@@ -96,6 +103,14 @@ async def update_user(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     update_data = body.model_dump(exclude_unset=True)
+
+    # Admins cannot escalate roles to admin/superadmin
+    if "role" in update_data and update_data["role"] in (UserRole.admin, UserRole.superadmin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admins cannot assign admin or superadmin roles. Contact a superadmin.",
+        )
+
     for key, value in update_data.items():
         setattr(user, key, value)
 

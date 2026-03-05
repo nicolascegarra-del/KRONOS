@@ -20,6 +20,7 @@ interface UserRow {
   role: "superadmin" | "admin" | "worker";
   is_active: boolean;
   company_id: string | null;
+  company_name: string | null;
   scheduled_start: string | null;
   created_at: string;
 }
@@ -137,7 +138,7 @@ export default function SuperadminUsersPage() {
                 <th className="text-left p-3 font-medium">Nombre</th>
                 <th className="text-left p-3 font-medium">Email</th>
                 <th className="text-center p-3 font-medium">Rol</th>
-                <th className="text-left p-3 font-medium">Empresa (ID)</th>
+                <th className="text-left p-3 font-medium">Empresa</th>
                 <th className="text-center p-3 font-medium">Activo</th>
                 <th className="text-center p-3 font-medium">Acciones</th>
               </tr>
@@ -148,8 +149,8 @@ export default function SuperadminUsersPage() {
                   <td className="p-3 font-medium">{u.full_name}</td>
                   <td className="p-3 text-muted-foreground">{u.email}</td>
                   <td className="p-3 text-center"><RoleBadge role={u.role} /></td>
-                  <td className="p-3 text-xs text-muted-foreground font-mono">
-                    {u.company_id ? u.company_id.slice(0, 8) + "…" : "—"}
+                  <td className="p-3 text-sm text-muted-foreground">
+                    {u.company_name ?? "—"}
                   </td>
                   <td className="p-3 text-center">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${u.is_active ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>

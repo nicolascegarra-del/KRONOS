@@ -118,6 +118,12 @@ async def run_migrations() -> None:
                 ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS auto_close_hours INTEGER DEFAULT 12
             """))
 
+        # Add geo_enabled column to company if missing
+        async with engine.begin() as conn:
+            await conn.execute(text("""
+                ALTER TABLE company ADD COLUMN IF NOT EXISTS geo_enabled BOOLEAN NOT NULL DEFAULT TRUE
+            """))
+
     print("[migrate] Schema up to date.")
 
 

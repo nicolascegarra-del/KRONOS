@@ -17,12 +17,14 @@ class CompanyCreate(BaseModel):
 class CompanyUpdate(BaseModel):
     name: Optional[str] = None
     max_workers: Optional[int] = None
+    geo_enabled: Optional[bool] = None
 
 
 class CompanyRead(BaseModel):
     id: UUID
     name: str
     max_workers: int
+    geo_enabled: bool
     worker_count: int
     created_at: datetime
 

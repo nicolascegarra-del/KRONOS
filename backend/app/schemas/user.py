@@ -40,5 +40,6 @@ class UserRead(BaseModel):
     scheduled_start: Optional[time] = None
     created_at: datetime
     company_id: Optional[UUID] = None
+    company_name: Optional[str] = None
 
     model_config = {"from_attributes": True}
