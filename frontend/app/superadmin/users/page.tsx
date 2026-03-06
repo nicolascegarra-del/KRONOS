@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Pencil } from "lucide-react";
+import { Pencil, Trash2, FileX, Users } from "lucide-react";
 
 interface UserRow {
   id: string;
@@ -58,6 +58,11 @@ export default function SuperadminUsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Selection
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Edit dialog
   const [editTarget, setEditTarget] = useState<UserRow | null>(null);
   const [form, setForm] = useState<EditForm>({
     email: "", full_name: "", password: "", role: "worker",
@@ -66,10 +71,18 @@ export default function SuperadminUsersPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Bulk action state
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Confirm dialog for destructive bulk actions
+  const [confirmAction, setConfirmAction] = useState<null | "deleteUsers" | "deleteFichajes">(null);
+
   const load = async () => {
     try {
       const res = await api.get<UserRow[]>("/superadmin/users");
       setUsers(res.data);
+      setSelected(new Set());
     } catch {
       setError("Error al cargar los usuarios");
     } finally {
@@ -79,6 +92,27 @@ export default function SuperadminUsersPage() {
 
   useEffect(() => { load(); }, []);
 
+  // --- Selection helpers ---
+  const selectableIds = users.filter((u) => u.role !== "superadmin").map((u) => u.id);
+  const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(selectableIds));
+    }
+  };
+
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  // --- Edit user ---
   const openEdit = (u: UserRow) => {
     setEditTarget(u);
     setForm({
@@ -117,6 +151,52 @@ export default function SuperadminUsersPage() {
     }
   };
 
+  // --- Delete fichajes for a single user ---
+  const deleteFichajesForUser = async (u: UserRow) => {
+    if (!confirm(`¿Borrar TODOS los fichajes de ${u.full_name}? Esta acción no se puede deshacer.`)) return;
+    setBulkLoading(true);
+    setBulkMsg(null);
+    try {
+      const res = await api.delete<{ deleted: number }>(`/superadmin/users/fichajes?user_id=${u.id}`);
+      setBulkMsg({ ok: true, text: `${res.data.deleted} fichaje(s) de ${u.full_name} eliminados.` });
+      await load();
+    } catch (e: any) {
+      setBulkMsg({ ok: false, text: e.response?.data?.detail || "Error al borrar fichajes" });
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  // --- Bulk actions (confirmed via dialog) ---
+  const executeBulkAction = async () => {
+    if (!confirmAction || selected.size === 0) return;
+    setBulkLoading(true);
+    setBulkMsg(null);
+    setConfirmAction(null);
+    try {
+      const selectedIds = Array.from(selected);
+      if (confirmAction === "deleteFichajes") {
+        const results = await Promise.all(
+          selectedIds.map((uid) =>
+            api.delete<{ deleted: number }>(`/superadmin/users/fichajes?user_id=${uid}`)
+          )
+        );
+        const total = results.reduce((acc, r) => acc + r.data.deleted, 0);
+        setBulkMsg({ ok: true, text: `${total} fichaje(s) eliminados de ${selectedIds.length} usuario(s).` });
+      } else {
+        const res = await api.delete<{ deleted: number }>("/superadmin/users/bulk", {
+          data: { user_ids: selectedIds },
+        });
+        setBulkMsg({ ok: true, text: `${res.data.deleted} usuario(s) eliminados correctamente.` });
+      }
+      await load();
+    } catch (e: any) {
+      setBulkMsg({ ok: false, text: e.response?.data?.detail || "Error en la operación" });
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
@@ -130,11 +210,59 @@ export default function SuperadminUsersPage() {
       <h1 className="text-2xl font-bold mb-6">Usuarios</h1>
       {error && <p className="text-destructive text-sm mb-4">{error}</p>}
 
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 mb-4 p-3 bg-slate-900 text-white rounded-lg text-sm">
+          <Users className="w-4 h-4 shrink-0" />
+          <span className="flex-1 font-medium">{selected.size} usuario(s) seleccionado(s)</span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-white border-white/30 hover:bg-white/10 hover:text-white"
+            disabled={bulkLoading}
+            onClick={() => setConfirmAction("deleteFichajes")}
+          >
+            <FileX className="w-3 h-3 mr-1" />
+            Borrar sus fichajes
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            disabled={bulkLoading}
+            onClick={() => setConfirmAction("deleteUsers")}
+          >
+            <Trash2 className="w-3 h-3 mr-1" />
+            Borrar usuarios
+          </Button>
+          <button
+            className="ml-1 text-white/60 hover:text-white text-lg leading-none"
+            onClick={() => setSelected(new Set())}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {bulkMsg && (
+        <p className={`text-sm mb-4 px-3 py-2 rounded ${bulkMsg.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-destructive"}`}>
+          {bulkMsg.text}
+        </p>
+      )}
+
       <div className="bg-white border rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b">
               <tr>
+                <th className="p-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    className="h-4 w-4 rounded border-gray-300"
+                    title="Seleccionar todos (excepto superadmins)"
+                  />
+                </th>
                 <th className="text-left p-3 font-medium">Nombre</th>
                 <th className="text-left p-3 font-medium">Email</th>
                 <th className="text-center p-3 font-medium">Rol</th>
@@ -144,31 +272,87 @@ export default function SuperadminUsersPage() {
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
-                <tr key={u.id} className="border-b last:border-0 hover:bg-slate-50">
-                  <td className="p-3 font-medium">{u.full_name}</td>
-                  <td className="p-3 text-muted-foreground">{u.email}</td>
-                  <td className="p-3 text-center"><RoleBadge role={u.role} /></td>
-                  <td className="p-3 text-sm text-muted-foreground">
-                    {u.company_name ?? "—"}
-                  </td>
-                  <td className="p-3 text-center">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${u.is_active ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                      {u.is_active ? "Sí" : "No"}
-                    </span>
-                  </td>
-                  <td className="p-3 text-center">
-                    <Button size="sm" variant="outline" onClick={() => openEdit(u)}>
-                      <Pencil className="w-3 h-3" />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+              {users.map((u) => {
+                const isSuperadmin = u.role === "superadmin";
+                const isChecked = selected.has(u.id);
+                return (
+                  <tr
+                    key={u.id}
+                    className={`border-b last:border-0 hover:bg-slate-50 ${isChecked ? "bg-blue-50" : ""}`}
+                  >
+                    <td className="p-3">
+                      {!isSuperadmin && (
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleOne(u.id)}
+                          className="h-4 w-4 rounded border-gray-300"
+                        />
+                      )}
+                    </td>
+                    <td className="p-3 font-medium">{u.full_name}</td>
+                    <td className="p-3 text-muted-foreground">{u.email}</td>
+                    <td className="p-3 text-center"><RoleBadge role={u.role} /></td>
+                    <td className="p-3 text-sm text-muted-foreground">
+                      {u.company_name ?? "—"}
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${u.is_active ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                        {u.is_active ? "Sí" : "No"}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <div className="flex items-center justify-center gap-1">
+                        <Button size="sm" variant="outline" onClick={() => openEdit(u)} title="Editar usuario">
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                        {!isSuperadmin && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                            onClick={() => deleteFichajesForUser(u)}
+                            disabled={bulkLoading}
+                            title="Borrar fichajes de este usuario"
+                          >
+                            <FileX className="w-3 h-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
 
+      {/* Confirm bulk action dialog */}
+      <Dialog open={confirmAction !== null} onOpenChange={(o) => !o && setConfirmAction(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {confirmAction === "deleteUsers" ? "Borrar usuarios" : "Borrar fichajes"}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {confirmAction === "deleteUsers"
+              ? `¿Eliminar permanentemente los ${selected.size} usuario(s) seleccionado(s) junto con todos sus fichajes? Esta acción no se puede deshacer.`
+              : `¿Eliminar todos los fichajes de los ${selected.size} usuario(s) seleccionado(s)? Los usuarios se conservarán.`}
+          </p>
+          <div className="flex gap-3 justify-end pt-2">
+            <Button variant="outline" onClick={() => setConfirmAction(null)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={executeBulkAction} disabled={bulkLoading}>
+              {bulkLoading ? "Procesando..." : "Confirmar"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit dialog */}
       <Dialog open={editTarget != null} onOpenChange={(open) => !open && setEditTarget(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

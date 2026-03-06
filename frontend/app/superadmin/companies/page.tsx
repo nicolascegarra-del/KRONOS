@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Building2, Pencil, Trash2, Plus, MapPin, MapPinOff } from "lucide-react";
+import { Building2, Pencil, Trash2, Plus, MapPin, MapPinOff, FileX } from "lucide-react";
 
 interface CompanyRead {
   id: string;
@@ -61,10 +61,15 @@ export default function CompaniesPage() {
   const [editError, setEditError] = useState<string | null>(null);
   const [editLoading, setEditLoading] = useState(false);
 
-  // Delete confirm
+  // Delete company confirm
   const [deleteTarget, setDeleteTarget] = useState<CompanyRead | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Delete fichajes for company
+  const [fichajesToDelete, setFichajesToDelete] = useState<CompanyRead | null>(null);
+  const [fichajesLoading, setFichajesLoading] = useState(false);
+  const [fichajesMsg, setFichajesMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const fetchCompanies = () => {
     setLoading(true);
@@ -138,6 +143,24 @@ export default function CompaniesPage() {
     }
   };
 
+  const handleDeleteFichajes = async () => {
+    if (!fichajesToDelete) return;
+    setFichajesLoading(true);
+    setFichajesMsg(null);
+    try {
+      const res = await api.delete<{ deleted: number }>(
+        `/superadmin/users/fichajes?company_id=${fichajesToDelete.id}`
+      );
+      setFichajesMsg({ ok: true, text: `${res.data.deleted} fichaje(s) de ${fichajesToDelete.name} eliminados.` });
+      setFichajesToDelete(null);
+    } catch (err: any) {
+      setFichajesMsg({ ok: false, text: err.response?.data?.detail || "Error al borrar fichajes" });
+      setFichajesToDelete(null);
+    } finally {
+      setFichajesLoading(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -147,6 +170,12 @@ export default function CompaniesPage() {
           Nueva empresa
         </Button>
       </div>
+
+      {fichajesMsg && (
+        <p className={`text-sm mb-4 px-3 py-2 rounded ${fichajesMsg.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-destructive"}`}>
+          {fichajesMsg.text}
+        </p>
+      )}
 
       {loading ? (
         <p className="text-muted-foreground text-sm">Cargando...</p>
@@ -177,14 +206,26 @@ export default function CompaniesPage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => openEdit(c)}
+                      title="Editar empresa"
                     >
                       <Pencil className="w-4 h-4" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                      onClick={() => { setFichajesMsg(null); setFichajesToDelete(c); }}
+                      disabled={fichajesLoading}
+                      title="Borrar todos los fichajes de esta empresa"
+                    >
+                      <FileX className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="text-destructive hover:text-destructive"
                       onClick={() => { setDeleteError(null); setDeleteTarget(c); }}
+                      title="Eliminar empresa"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -354,6 +395,28 @@ export default function CompaniesPage() {
             </Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleteLoading}>
               {deleteLoading ? "Eliminando..." : "Eliminar"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete fichajes of company confirm dialog */}
+      <Dialog open={!!fichajesToDelete} onOpenChange={(o) => !o && setFichajesToDelete(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Borrar fichajes de empresa</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            ¿Borrar <strong>todos los fichajes</strong> de{" "}
+            <strong>{fichajesToDelete?.name}</strong>? Los trabajadores se conservarán pero
+            perderán todo su historial de fichajes. Esta acción no se puede deshacer.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setFichajesToDelete(null)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteFichajes} disabled={fichajesLoading}>
+              {fichajesLoading ? "Borrando..." : "Borrar fichajes"}
             </Button>
           </div>
         </DialogContent>
