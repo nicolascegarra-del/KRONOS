@@ -21,6 +21,19 @@ interface CompanyRead {
   geo_enabled: boolean;
   worker_count: number;
   created_at: string;
+  // Billing
+  nif?: string;
+  address?: string;
+  city?: string;
+  postal_code?: string;
+  phone?: string;
+  billing_email?: string;
+  // Subscription
+  subscription_plan?: string;
+  subscription_price?: number;
+  subscription_discount?: number;
+  subscription_start?: string;
+  subscription_end?: string;
 }
 
 interface CreateForm {
@@ -35,6 +48,13 @@ interface EditForm {
   name: string;
   max_workers: number;
   geo_enabled: boolean;
+  // Billing
+  nif: string;
+  address: string;
+  city: string;
+  postal_code: string;
+  phone: string;
+  billing_email: string;
 }
 
 const emptyCreate: CreateForm = {
@@ -57,7 +77,7 @@ export default function CompaniesPage() {
 
   // Edit dialog
   const [editTarget, setEditTarget] = useState<CompanyRead | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({ name: "", max_workers: 10, geo_enabled: true });
+  const [editForm, setEditForm] = useState<EditForm>({ name: "", max_workers: 10, geo_enabled: true, nif: "", address: "", city: "", postal_code: "", phone: "", billing_email: "" });
   const [editError, setEditError] = useState<string | null>(null);
   const [editLoading, setEditLoading] = useState(false);
 
@@ -104,7 +124,17 @@ export default function CompaniesPage() {
 
   const openEdit = (c: CompanyRead) => {
     setEditTarget(c);
-    setEditForm({ name: c.name, max_workers: c.max_workers, geo_enabled: c.geo_enabled });
+    setEditForm({
+      name: c.name,
+      max_workers: c.max_workers,
+      geo_enabled: c.geo_enabled,
+      nif: c.nif ?? "",
+      address: c.address ?? "",
+      city: c.city ?? "",
+      postal_code: c.postal_code ?? "",
+      phone: c.phone ?? "",
+      billing_email: c.billing_email ?? "",
+    });
     setEditError(null);
   };
 
@@ -317,7 +347,7 @@ export default function CompaniesPage() {
 
       {/* Edit dialog */}
       <Dialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar empresa</DialogTitle>
           </DialogHeader>
@@ -356,6 +386,61 @@ export default function CompaniesPage() {
               >
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${editForm.geo_enabled ? "translate-x-6" : "translate-x-1"}`} />
               </button>
+            </div>
+            <hr />
+            <p className="text-sm font-medium text-muted-foreground">Datos de facturación</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>NIF / CIF</Label>
+                <Input
+                  value={editForm.nif}
+                  onChange={(e) => setEditForm((f) => ({ ...f, nif: e.target.value }))}
+                  placeholder="B12345678"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Teléfono</Label>
+                <Input
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+                  placeholder="+34 900 000 000"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Dirección fiscal</Label>
+              <Input
+                value={editForm.address}
+                onChange={(e) => setEditForm((f) => ({ ...f, address: e.target.value }))}
+                placeholder="Calle Mayor 1, 1º"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Ciudad</Label>
+                <Input
+                  value={editForm.city}
+                  onChange={(e) => setEditForm((f) => ({ ...f, city: e.target.value }))}
+                  placeholder="Madrid"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Código postal</Label>
+                <Input
+                  value={editForm.postal_code}
+                  onChange={(e) => setEditForm((f) => ({ ...f, postal_code: e.target.value }))}
+                  placeholder="28001"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Email de facturación</Label>
+              <Input
+                type="email"
+                value={editForm.billing_email}
+                onChange={(e) => setEditForm((f) => ({ ...f, billing_email: e.target.value }))}
+                placeholder="facturas@empresa.com"
+              />
             </div>
             {editError && (
               <p className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded">

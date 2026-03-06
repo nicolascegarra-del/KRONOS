@@ -2,13 +2,13 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Fichajes",
+  title: "KRONOS",
   description: "Sistema de control de fichajes",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Fichajes",
+    title: "KRONOS",
   },
   formatDetection: {
     telephone: false,

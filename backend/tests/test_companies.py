@@ -297,6 +297,106 @@ async def test_admin_cannot_escalate_role(
 
 
 @pytest.mark.asyncio
+async def test_update_company_billing_fields(
+    client: AsyncClient, superadmin_user: User, company: Company
+):
+    """Superadmin can set billing fields on a company."""
+    token = await get_token(client, "superadmin@test.com", "Super1234!")
+    resp = await client.put(
+        f"/companies/{company.id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "nif": "B12345678",
+            "address": "Calle Gran Via 1",
+            "city": "Madrid",
+            "postal_code": "28013",
+            "phone": "+34 910 000 000",
+            "billing_email": "facturas@testcompany.com",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["nif"] == "B12345678"
+    assert data["address"] == "Calle Gran Via 1"
+    assert data["city"] == "Madrid"
+    assert data["postal_code"] == "28013"
+    assert data["phone"] == "+34 910 000 000"
+    assert data["billing_email"] == "facturas@testcompany.com"
+
+
+@pytest.mark.asyncio
+async def test_update_company_subscription(
+    client: AsyncClient, superadmin_user: User, company: Company
+):
+    """Superadmin can assign a subscription plan to a company."""
+    token = await get_token(client, "superadmin@test.com", "Super1234!")
+    resp = await client.put(
+        f"/companies/{company.id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "subscription_plan": "monthly",
+            "subscription_price": 49.99,
+            "subscription_discount": 10.0,
+            "subscription_start": "2026-01-01T00:00:00",
+            "subscription_end": "2026-12-31T23:59:59",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["subscription_plan"] == "monthly"
+    assert data["subscription_price"] == 49.99
+    assert data["subscription_discount"] == 10.0
+    assert data["subscription_start"] is not None
+    assert data["subscription_end"] is not None
+
+
+@pytest.mark.asyncio
+async def test_company_billing_fields_in_list(
+    client: AsyncClient, superadmin_user: User, company: Company
+):
+    """Billing fields are returned in the company list."""
+    token = await get_token(client, "superadmin@test.com", "Super1234!")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    await client.put(
+        f"/companies/{company.id}",
+        headers=headers,
+        json={"nif": "A98765432", "subscription_plan": "annual"},
+    )
+
+    resp = await client.get("/companies", headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    c = next(d for d in data if d["id"] == str(company.id))
+    assert c["nif"] == "A98765432"
+    assert c["subscription_plan"] == "annual"
+
+
+@pytest.mark.asyncio
+async def test_new_company_has_null_billing_fields(
+    client: AsyncClient, superadmin_user: User
+):
+    """Newly created companies have null billing and subscription fields."""
+    token = await get_token(client, "superadmin@test.com", "Super1234!")
+    resp = await client.post(
+        "/companies",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "name": "Fresh Company",
+            "max_workers": 5,
+            "admin_email": "fresh@empresa.com",
+            "admin_full_name": "Fresh Admin",
+            "admin_password": "Admin1234!",
+        },
+    )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["nif"] is None
+    assert data["subscription_plan"] is None
+    assert data["subscription_price"] is None
+
+
+@pytest.mark.asyncio
 async def test_superadmin_users_include_company_name(
     client: AsyncClient, superadmin_user: User, admin_user: User, worker_user: User
 ):

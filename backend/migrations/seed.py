@@ -16,6 +16,7 @@ from app.models.user import User, UserRole
 from app.models.pausa_tipo import PausaTipo
 from app.models.worker_schedule import WorkerSchedule  # noqa: F401 — ensures table is created
 from app.models.work_center import WorkCenter  # noqa: F401 — ensures table is created
+from app.models.invoice_config import InvoiceConfig  # noqa: F401 — ensures table is created
 from app.services.auth import hash_password
 
 
@@ -123,6 +124,26 @@ async def run_migrations() -> None:
             await conn.execute(text("""
                 ALTER TABLE company ADD COLUMN IF NOT EXISTS geo_enabled BOOLEAN NOT NULL DEFAULT TRUE
             """))
+
+        # Add billing/subscription columns to company if missing
+        async with engine.begin() as conn:
+            for col_def in (
+                "nif VARCHAR",
+                "address VARCHAR",
+                "city VARCHAR",
+                "postal_code VARCHAR",
+                "phone VARCHAR",
+                "billing_email VARCHAR",
+                "subscription_plan VARCHAR",
+                "subscription_price DOUBLE PRECISION",
+                "subscription_discount DOUBLE PRECISION DEFAULT 0",
+                "subscription_start TIMESTAMP",
+                "subscription_end TIMESTAMP",
+            ):
+                col_name = col_def.split()[0]
+                await conn.execute(text(f"""
+                    ALTER TABLE company ADD COLUMN IF NOT EXISTS {col_name} {" ".join(col_def.split()[1:])}
+                """))
 
     print("[migrate] Schema up to date.")
 

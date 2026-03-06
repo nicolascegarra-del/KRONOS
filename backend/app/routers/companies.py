@@ -25,6 +25,28 @@ async def _worker_count(session: AsyncSession, company_id: UUID) -> int:
     return result.scalar_one()
 
 
+def _to_read(c: Company, worker_count: int) -> CompanyRead:
+    return CompanyRead(
+        id=c.id,
+        name=c.name,
+        max_workers=c.max_workers,
+        geo_enabled=c.geo_enabled,
+        worker_count=worker_count,
+        created_at=c.created_at,
+        nif=c.nif,
+        address=c.address,
+        city=c.city,
+        postal_code=c.postal_code,
+        phone=c.phone,
+        billing_email=c.billing_email,
+        subscription_plan=c.subscription_plan,
+        subscription_price=c.subscription_price,
+        subscription_discount=c.subscription_discount,
+        subscription_start=c.subscription_start,
+        subscription_end=c.subscription_end,
+    )
+
+
 @router.get("", response_model=list[CompanyRead])
 async def list_companies(
     _: User = Depends(require_superadmin),
@@ -34,16 +56,7 @@ async def list_companies(
     companies = result.scalars().all()
     out = []
     for c in companies:
-        out.append(
-            CompanyRead(
-                id=c.id,
-                name=c.name,
-                max_workers=c.max_workers,
-                geo_enabled=c.geo_enabled,
-                worker_count=await _worker_count(session, c.id),
-                created_at=c.created_at,
-            )
-        )
+        out.append(_to_read(c, await _worker_count(session, c.id)))
     return out
 
 
@@ -87,14 +100,7 @@ async def create_company(
     await session.commit()
     await session.refresh(company)
 
-    return CompanyRead(
-        id=company.id,
-        name=company.name,
-        max_workers=company.max_workers,
-        geo_enabled=company.geo_enabled,
-        worker_count=0,
-        created_at=company.created_at,
-    )
+    return _to_read(company, 0)
 
 
 @router.put("/{company_id}", response_model=CompanyRead)
@@ -115,19 +121,34 @@ async def update_company(
         company.max_workers = body.max_workers
     if body.geo_enabled is not None:
         company.geo_enabled = body.geo_enabled
+    if body.nif is not None:
+        company.nif = body.nif
+    if body.address is not None:
+        company.address = body.address
+    if body.city is not None:
+        company.city = body.city
+    if body.postal_code is not None:
+        company.postal_code = body.postal_code
+    if body.phone is not None:
+        company.phone = body.phone
+    if body.billing_email is not None:
+        company.billing_email = body.billing_email
+    if body.subscription_plan is not None:
+        company.subscription_plan = body.subscription_plan
+    if body.subscription_price is not None:
+        company.subscription_price = body.subscription_price
+    if body.subscription_discount is not None:
+        company.subscription_discount = body.subscription_discount
+    if body.subscription_start is not None:
+        company.subscription_start = body.subscription_start
+    if body.subscription_end is not None:
+        company.subscription_end = body.subscription_end
 
     session.add(company)
     await session.commit()
     await session.refresh(company)
 
-    return CompanyRead(
-        id=company.id,
-        name=company.name,
-        max_workers=company.max_workers,
-        geo_enabled=company.geo_enabled,
-        worker_count=await _worker_count(session, company.id),
-        created_at=company.created_at,
-    )
+    return _to_read(company, await _worker_count(session, company.id))
 
 
 @router.delete("/{company_id}", status_code=status.HTTP_204_NO_CONTENT)
