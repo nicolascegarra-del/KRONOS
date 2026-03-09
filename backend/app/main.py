@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import auth, users, fichajes, reports, pause_types, notifications, companies, worker_schedule, work_centers, superadmin_users, invoice_config
+from app.routers import auth, users, fichajes, reports, pause_types, notifications, companies, worker_schedule, work_centers, superadmin_users, invoice_config, worker_export, access_logs
 from app.routers import settings as settings_router
 
 app_settings = get_settings()
@@ -35,9 +35,45 @@ async def _auto_close_loop() -> None:
         await asyncio.sleep(_AUTO_CLOSE_INTERVAL)
 
 
+async def _run_column_migrations() -> None:
+    """Add new columns to existing tables without dropping data (idempotent)."""
+    from sqlalchemy import text
+    from app.database import engine
+    async with engine.begin() as conn:
+        await conn.execute(text(
+            'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS edit_comment TEXT'
+        ))
+        await conn.execute(text(
+            'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS last_edited_by_id UUID REFERENCES "user"(id)'
+        ))
+        await conn.execute(text(
+            'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS last_edited_at TIMESTAMP'
+        ))
+        await conn.execute(text(
+            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS dni VARCHAR'
+        ))
+        await conn.execute(text(
+            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS geo_consent BOOLEAN'
+        ))
+        await conn.execute(text(
+            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS geo_consent_date TIMESTAMP'
+        ))
+        # Workers already using the app are assumed to have implicitly consented
+        await conn.execute(text(
+            "UPDATE \"user\" SET geo_consent = true, geo_consent_date = NOW() "
+            "WHERE role = 'worker' AND geo_consent IS NULL"
+        ))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from migrations.seed import seed
+    from app.database import init_db
+    # register new models so SQLModel.metadata knows about their tables
+    import app.models.fichajeeditlog  # noqa: F401
+    import app.models.adminaccesslog  # noqa: F401
+    await init_db()
+    await _run_column_migrations()
     await seed()
     task = asyncio.create_task(_auto_close_loop())
     yield
@@ -74,6 +110,8 @@ app.include_router(worker_schedule.router)
 app.include_router(work_centers.router)
 app.include_router(superadmin_users.router)
 app.include_router(invoice_config.router)
+app.include_router(worker_export.router)
+app.include_router(access_logs.router)
 
 
 @app.get("/health")

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { getCurrentCoords } from "@/lib/geo";
+import { useAuthStore } from "@/store/auth";
 import { PauseDialog } from "./PauseDialog";
 import { Play, Square, Coffee, RotateCcw } from "lucide-react";
 
@@ -52,12 +53,17 @@ interface ShiftButtonProps {
 }
 
 export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
+  const { user, setUser } = useAuthStore();
   const [status, setStatus] = useState<ShiftStatus>("idle");
   const [loading, setLoading] = useState(false);
   const [fichaje, setFichaje] = useState<Fichaje | null>(null);
   const [pauseOpen, setPauseOpen] = useState(false);
   const [elapsed, setElapsed] = useState("00:00:00");
   const [error, setError] = useState<string | null>(null);
+  // RGPD: local geo_consent mirrors JWT value; null means not yet asked
+  const [geoConsent, setGeoConsent] = useState<boolean | null>(user?.geo_consent ?? null);
+  const [consentOpen, setConsentOpen] = useState(false);
+  const [consentLoading, setConsentLoading] = useState(false);
 
   // Poll for active fichaje on mount
   useEffect(() => {
@@ -87,11 +93,47 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
     return () => clearInterval(id);
   }, [fichaje, status]);
 
-  const handleStart = async () => {
+  /** Returns coords only if consent was granted; null if denied or unavailable. */
+  const getCoordsIfConsented = async (): Promise<{ lat: number; lng: number } | null> => {
+    if (geoConsent === false) return null;
+    return getCurrentCoords();
+  };
+
+  const handleConsentAccept = async () => {
+    setConsentLoading(true);
+    try {
+      await api.post("/workers/me/geo-consent", { accepted: true });
+      setGeoConsent(true);
+      if (user) setUser({ ...user, geo_consent: true });
+    } catch {
+      // proceed anyway
+    } finally {
+      setConsentLoading(false);
+      setConsentOpen(false);
+      doStart();
+    }
+  };
+
+  const handleConsentReject = async () => {
+    setConsentLoading(true);
+    try {
+      await api.post("/workers/me/geo-consent", { accepted: false });
+      setGeoConsent(false);
+      if (user) setUser({ ...user, geo_consent: false });
+    } catch {
+      // proceed anyway
+    } finally {
+      setConsentLoading(false);
+      setConsentOpen(false);
+      doStart();
+    }
+  };
+
+  const doStart = async () => {
     setLoading(true);
     setError(null);
     try {
-      const coords = await getCurrentCoords();
+      const coords = geoConsent === false ? null : await getCurrentCoords();
       const res = await api.post<Fichaje>("/fichajes/start", { coords });
       setFichaje(res.data);
       setStatus("active");
@@ -103,11 +145,19 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
     }
   };
 
+  const handleStart = async () => {
+    if (geoConsent === null) {
+      setConsentOpen(true);
+      return;
+    }
+    doStart();
+  };
+
   const handleEnd = async () => {
     setLoading(true);
     setError(null);
     try {
-      const coords = await getCurrentCoords();
+      const coords = await getCoordsIfConsented();
       await api.post("/fichajes/end", { coords });
       setFichaje(null);
       setStatus("idle");
@@ -124,7 +174,7 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
     setLoading(true);
     setError(null);
     try {
-      const coords = await getCurrentCoords();
+      const coords = await getCoordsIfConsented();
       const res = await api.post<Fichaje>("/fichajes/resume", { coords });
       setFichaje(res.data);
       setStatus("active");
@@ -237,6 +287,37 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
         onOpenChange={setPauseOpen}
         onSuccess={handlePauseSuccess}
       />
+
+      {/* RGPD Art. 7 — Geolocation consent dialog */}
+      {consentOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4">
+            <h2 className="text-lg font-semibold text-slate-800">Uso de ubicación</h2>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              Kronos registra tu ubicación GPS en el momento de marcar entrada, salida y pausas.
+              Esta información es accesible por el administrador de tu empresa para verificar que
+              fichas desde el centro de trabajo. Puedes revocar este consentimiento en cualquier
+              momento desde tu perfil.
+            </p>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={handleConsentReject}
+                disabled={consentLoading}
+                className="flex-1 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+              >
+                Rechazar
+              </button>
+              <button
+                onClick={handleConsentAccept}
+                disabled={consentLoading}
+                className="flex-1 py-2 rounded-lg bg-green-500 text-white text-sm font-medium hover:bg-green-600 disabled:opacity-50"
+              >
+                Aceptar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

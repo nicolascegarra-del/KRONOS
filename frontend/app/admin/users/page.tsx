@@ -22,6 +22,7 @@ interface User {
   role: "admin" | "worker";
   is_active: boolean;
   scheduled_start?: string;
+  dni?: string;
 }
 
 interface UserFormData {
@@ -29,6 +30,7 @@ interface UserFormData {
   full_name: string;
   password: string;
   scheduled_start: string;
+  dni: string;
 }
 
 const emptyForm: UserFormData = {
@@ -36,6 +38,7 @@ const emptyForm: UserFormData = {
   full_name: "",
   password: "",
   scheduled_start: "",
+  dni: "",
 };
 
 export default function UsersPage() {
@@ -73,6 +76,7 @@ export default function UsersPage() {
       full_name: u.full_name,
       password: "",
       scheduled_start: u.scheduled_start || "",
+      dni: u.dni || "",
     });
     setError(null);
     setDialogOpen(true);
@@ -88,6 +92,7 @@ export default function UsersPage() {
         await api.put(`/users/${editUser.id}`, {
           full_name: form.full_name,
           scheduled_start: form.scheduled_start || null,
+          dni: form.dni || null,
         });
       } else {
         await api.post("/users", {
@@ -95,6 +100,7 @@ export default function UsersPage() {
           full_name: form.full_name,
           password: form.password,
           scheduled_start: form.scheduled_start || null,
+          dni: form.dni || null,
         });
       }
       setDialogOpen(false);
@@ -133,6 +139,7 @@ export default function UsersPage() {
               <tr>
                 <th className="text-left p-3 font-medium">Nombre</th>
                 <th className="text-left p-3 font-medium">Email</th>
+                <th className="text-left p-3 font-medium">DNI/NIF</th>
                 <th className="text-left p-3 font-medium">Rol</th>
                 <th className="text-left p-3 font-medium">Entrada</th>
                 <th className="text-left p-3 font-medium">Estado</th>
@@ -151,6 +158,7 @@ export default function UsersPage() {
                   <tr key={u.id} className="border-b last:border-0 hover:bg-slate-50">
                     <td className="p-3 font-medium">{u.full_name}</td>
                     <td className="p-3 text-muted-foreground">{u.email}</td>
+                    <td className="p-3 text-muted-foreground">{u.dni || "—"}</td>
                     <td className="p-3">
                       <Badge variant={u.role === "admin" ? "default" : "secondary"}>
                         {u.role}
@@ -225,6 +233,15 @@ export default function UsersPage() {
                 </div>
               </>
             )}
+
+            <div className="space-y-2">
+              <Label>DNI / NIF</Label>
+              <Input
+                value={form.dni}
+                onChange={(e) => setForm({ ...form, dni: e.target.value })}
+                placeholder="12345678A"
+              />
+            </div>
 
             <div className="space-y-2">
               <Label>Hora de entrada prevista</Label>

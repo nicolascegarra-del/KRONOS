@@ -30,6 +30,10 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     company_id: Optional[UUID] = Field(default=None, foreign_key="company.id")
 
+    dni: Optional[str] = Field(default=None)
+    geo_consent: Optional[bool] = Field(default=None)
+    geo_consent_date: Optional[datetime] = Field(default=None)
+
     fichajes: List["Fichaje"] = Relationship(back_populates="user")
     company: Optional["Company"] = Relationship(back_populates="users")
     schedule: List["WorkerSchedule"] = Relationship(back_populates="user")

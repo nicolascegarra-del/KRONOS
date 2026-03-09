@@ -1,3 +1,4 @@
+import asyncio
 from datetime import date, datetime, timezone
 from uuid import UUID
 
@@ -13,6 +14,19 @@ from app.models.pausa import Pausa
 from app.models.user import User
 from app.schemas.reports import HoursReport, LatenessAlert, WorkerHoursSummary
 from app.services.hours import calculate_pause_minutes
+
+
+async def _log_admin_access(admin_id: UUID, action: str, details: str | None = None) -> None:
+    try:
+        import json
+        from app.database import AsyncSessionLocal
+        from app.models.adminaccesslog import AdminAccessLog
+        async with AsyncSessionLocal() as s:
+            log = AdminAccessLog(admin_id=admin_id, action=action, details=details)
+            s.add(log)
+            await s.commit()
+    except Exception:
+        pass
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -65,6 +79,9 @@ async def hours_report(
     for summary in workers_map.values():
         summary.total_hours = round(summary.total_minutes / 60, 2)
 
+    import json
+    details = json.dumps({"from_date": from_date.isoformat(), "to_date": to_date.isoformat()})
+    asyncio.create_task(_log_admin_access(admin.id, "EXPORT_REPORT", details))
     return HoursReport(
         from_date=from_date,
         to_date=to_date,

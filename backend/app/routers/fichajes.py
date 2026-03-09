@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
-from app.dependencies import get_current_user, require_admin
+from app.dependencies import get_current_user, require_admin, require_superadmin
 from app.models.company import Company
 from app.models.email_config import EmailConfig
 from app.models.fichaje import Fichaje, FichajeStatus
@@ -262,6 +262,20 @@ async def get_my_fichajes(
 # ---------------------------------------------------------------------------
 
 
+async def _log_admin_access(admin_id: UUID, action: str, details: str | None = None) -> None:
+    """Fire-and-forget: write an AdminAccessLog row using a fresh session."""
+    try:
+        import json
+        from app.database import AsyncSessionLocal
+        from app.models.adminaccesslog import AdminAccessLog
+        async with AsyncSessionLocal() as s:
+            log = AdminAccessLog(admin_id=admin_id, action=action, details=details)
+            s.add(log)
+            await s.commit()
+    except Exception:
+        pass
+
+
 @router.get("/admin", response_model=list[FichajeAdminRead])
 async def admin_list_fichajes(
     user_id: Optional[UUID] = None,
@@ -271,6 +285,7 @@ async def admin_list_fichajes(
     admin: User = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
+    import json
     query = (
         select(Fichaje)
         .join(User, Fichaje.user_id == User.id)
@@ -287,7 +302,15 @@ async def admin_list_fichajes(
     if to_date:
         query = query.where(Fichaje.start_time <= datetime.combine(to_date, datetime.max.time()))
     result = await session.execute(query)
-    return result.scalars().all()
+    rows = result.scalars().all()
+    details = json.dumps({
+        "user_id": str(user_id) if user_id else None,
+        "status": fichaje_status.value if fichaje_status else None,
+        "from_date": from_date.isoformat() if from_date else None,
+        "to_date": to_date.isoformat() if to_date else None,
+    })
+    asyncio.create_task(_log_admin_access(admin.id, "VIEW_FICHAJES", details))
+    return rows
 
 
 @router.post("/admin/{fichaje_id}/end", response_model=FichajeRead)
@@ -325,18 +348,25 @@ async def admin_end_fichaje(
 @router.delete("/admin/{fichaje_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def admin_delete_fichaje(
     fichaje_id: UUID,
-    admin: User = Depends(require_admin),
+    _superadmin: User = Depends(require_superadmin),
     session: AsyncSession = Depends(get_session),
 ):
     result = await session.execute(
         select(Fichaje)
-        .join(User, Fichaje.user_id == User.id)
         .options(selectinload(Fichaje.pausas))
-        .where(Fichaje.id == fichaje_id, User.company_id == admin.company_id)
+        .where(Fichaje.id == fichaje_id)
     )
     fichaje = result.scalar_one_or_none()
     if not fichaje:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fichaje not found")
+
+    # delete associated edit logs first
+    from app.models.fichajeeditlog import FichajeEditLog
+    logs_result = await session.execute(
+        select(FichajeEditLog).where(FichajeEditLog.fichaje_id == fichaje_id)
+    )
+    for log in logs_result.scalars().all():
+        await session.delete(log)
 
     for p in fichaje.pausas:
         await session.delete(p)
@@ -351,6 +381,9 @@ async def admin_edit_fichaje(
     admin: User = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
+    import json
+    from app.models.fichajeeditlog import FichajeEditLog
+
     result = await session.execute(
         select(Fichaje)
         .join(User, Fichaje.user_id == User.id)
@@ -360,6 +393,24 @@ async def admin_edit_fichaje(
     fichaje = result.scalar_one_or_none()
     if not fichaje:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fichaje not found")
+
+    # Snapshot original state before applying changes
+    original_snapshot = {
+        "start_time": fichaje.start_time.isoformat() if fichaje.start_time else None,
+        "end_time": fichaje.end_time.isoformat() if fichaje.end_time else None,
+        "status": fichaje.status.value if fichaje.status else None,
+        "total_minutes": fichaje.total_minutes,
+        "late_minutes": fichaje.late_minutes,
+        "out_of_range": fichaje.out_of_range,
+        "edit_comment": fichaje.edit_comment,
+    }
+    edit_log = FichajeEditLog(
+        fichaje_id=fichaje.id,
+        edited_by_id=admin.id,
+        comment=body.edit_comment,
+        original_data=json.dumps(original_snapshot),
+    )
+    session.add(edit_log)
 
     if body.start_time is not None:
         fichaje.start_time = body.start_time
@@ -380,9 +431,43 @@ async def admin_edit_fichaje(
         if fichaje.status == FichajeStatus.finished and fichaje.end_time is not None:
             fichaje.total_minutes = calculate_total_minutes(fichaje, fichaje.pausas)
 
+    fichaje.edit_comment = body.edit_comment
+    fichaje.last_edited_by_id = admin.id
+    fichaje.last_edited_at = _now()
+
     session.add(fichaje)
     await session.commit()
     return await _reload(session, fichaje.id)
+
+
+@router.get("/superadmin", response_model=list[FichajeAdminRead])
+async def superadmin_list_fichajes(
+    company_id: Optional[UUID] = None,
+    user_id: Optional[UUID] = None,
+    fichaje_status: Optional[FichajeStatus] = Query(default=None, alias="status"),
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    _superadmin: User = Depends(require_superadmin),
+    session: AsyncSession = Depends(get_session),
+):
+    query = (
+        select(Fichaje)
+        .join(User, Fichaje.user_id == User.id)
+        .options(selectinload(Fichaje.user), selectinload(Fichaje.pausas))
+        .order_by(Fichaje.start_time.desc())
+    )
+    if company_id:
+        query = query.where(User.company_id == company_id)
+    if user_id:
+        query = query.where(Fichaje.user_id == user_id)
+    if fichaje_status:
+        query = query.where(Fichaje.status == fichaje_status)
+    if from_date:
+        query = query.where(Fichaje.start_time >= datetime.combine(from_date, datetime.min.time()))
+    if to_date:
+        query = query.where(Fichaje.start_time <= datetime.combine(to_date, datetime.max.time()))
+    result = await session.execute(query)
+    return result.scalars().all()
 
 
 @router.post("/admin/close-all", status_code=status.HTTP_200_OK)

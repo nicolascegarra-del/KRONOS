@@ -12,6 +12,7 @@ class UserCreate(BaseModel):
     password: str
     role: UserRole = UserRole.worker
     scheduled_start: Optional[time] = None
+    dni: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
@@ -19,6 +20,7 @@ class UserUpdate(BaseModel):
     role: Optional[UserRole] = None
     scheduled_start: Optional[time] = None
     is_active: Optional[bool] = None
+    dni: Optional[str] = None
 
 
 class SuperadminUserUpdate(BaseModel):
@@ -41,5 +43,7 @@ class UserRead(BaseModel):
     created_at: datetime
     company_id: Optional[UUID] = None
     company_name: Optional[str] = None
+    dni: Optional[str] = None
+    geo_consent: Optional[bool] = None
 
     model_config = {"from_attributes": True}

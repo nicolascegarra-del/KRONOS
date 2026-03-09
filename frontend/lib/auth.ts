@@ -6,6 +6,7 @@ export interface AuthUser {
   full_name: string;
   role: "superadmin" | "admin" | "worker";
   scheduled_start?: string;
+  geo_consent: boolean | null;
 }
 
 export async function loginUser(email: string, password: string): Promise<AuthUser> {
@@ -26,6 +27,7 @@ export async function loginUser(email: string, password: string): Promise<AuthUs
     email,
     full_name: payload.full_name ?? "",
     role: payload.role,
+    geo_consent: payload.geo_consent ?? null,
   };
 }
 
