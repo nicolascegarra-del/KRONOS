@@ -22,6 +22,7 @@ interface User {
   role: "admin" | "worker";
   is_active: boolean;
   scheduled_start?: string;
+  scheduled_end?: string;
   dni?: string;
 }
 
@@ -30,6 +31,7 @@ interface UserFormData {
   full_name: string;
   password: string;
   scheduled_start: string;
+  scheduled_end: string;
   dni: string;
 }
 
@@ -38,6 +40,7 @@ const emptyForm: UserFormData = {
   full_name: "",
   password: "",
   scheduled_start: "",
+  scheduled_end: "",
   dni: "",
 };
 
@@ -76,6 +79,7 @@ export default function UsersPage() {
       full_name: u.full_name,
       password: "",
       scheduled_start: u.scheduled_start || "",
+      scheduled_end: u.scheduled_end || "",
       dni: u.dni || "",
     });
     setError(null);
@@ -92,6 +96,7 @@ export default function UsersPage() {
         await api.put(`/users/${editUser.id}`, {
           full_name: form.full_name,
           scheduled_start: form.scheduled_start || null,
+          scheduled_end: form.scheduled_end || null,
           dni: form.dni || null,
         });
       } else {
@@ -100,6 +105,7 @@ export default function UsersPage() {
           full_name: form.full_name,
           password: form.password,
           scheduled_start: form.scheduled_start || null,
+          scheduled_end: form.scheduled_end || null,
           dni: form.dni || null,
         });
       }
@@ -141,7 +147,7 @@ export default function UsersPage() {
                 <th className="text-left p-3 font-medium">Email</th>
                 <th className="text-left p-3 font-medium">DNI/NIF</th>
                 <th className="text-left p-3 font-medium">Rol</th>
-                <th className="text-left p-3 font-medium">Entrada</th>
+                <th className="text-left p-3 font-medium">Horario</th>
                 <th className="text-left p-3 font-medium">Estado</th>
                 <th className="text-right p-3 font-medium">Acciones</th>
               </tr>
@@ -164,7 +170,11 @@ export default function UsersPage() {
                         {u.role}
                       </Badge>
                     </td>
-                    <td className="p-3">{u.scheduled_start || "—"}</td>
+                    <td className="p-3">
+                      {u.scheduled_start
+                        ? `${u.scheduled_start}${u.scheduled_end ? ` – ${u.scheduled_end}` : ""}`
+                        : "—"}
+                    </td>
                     <td className="p-3">
                       <Badge variant={u.is_active ? "success" : "destructive"}>
                         {u.is_active ? "Activo" : "Inactivo"}
@@ -243,13 +253,23 @@ export default function UsersPage() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>Hora de entrada prevista</Label>
-              <Input
-                type="time"
-                value={form.scheduled_start}
-                onChange={(e) => setForm({ ...form, scheduled_start: e.target.value })}
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Hora de entrada prevista</Label>
+                <Input
+                  type="time"
+                  value={form.scheduled_start}
+                  onChange={(e) => setForm({ ...form, scheduled_start: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Hora de salida prevista</Label>
+                <Input
+                  type="time"
+                  value={form.scheduled_end}
+                  onChange={(e) => setForm({ ...form, scheduled_end: e.target.value })}
+                />
+              </div>
             </div>
 
             {error && <p className="text-sm text-destructive">{error}</p>}

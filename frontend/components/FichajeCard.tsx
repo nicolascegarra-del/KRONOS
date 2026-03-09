@@ -4,7 +4,7 @@ import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDateTime, formatTime, minutesToHoursLabel } from "@/lib/utils";
-import { Clock, Coffee } from "lucide-react";
+import { Clock, Coffee, Pencil, Monitor, Home } from "lucide-react";
 
 interface Pausa {
   id: string;
@@ -20,6 +20,8 @@ interface Fichaje {
   status: "active" | "paused" | "finished";
   total_minutes?: number;
   late_minutes?: number;
+  modalidad?: string;
+  edit_comment?: string;
   pausas: Pausa[];
 }
 
@@ -77,7 +79,27 @@ export function FichajeCard({ fichaje }: FichajeCardProps) {
             </div>
           )}
 
+          {fichaje.modalidad === "teletrabajo" ? (
+            <div className="flex items-center gap-1 text-blue-600">
+              <Home className="w-4 h-4" />
+              <span>Teletrabajo</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 text-slate-500">
+              <Monitor className="w-4 h-4" />
+              <span>Presencial</span>
+            </div>
+          )}
+
         </div>
+
+        {/* Edit comment */}
+        {fichaje.edit_comment && (
+          <div className="mt-2 flex items-start gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+            <Pencil className="w-3 h-3 mt-0.5 shrink-0" />
+            <span>{fichaje.edit_comment}</span>
+          </div>
+        )}
 
         {/* Pauses detail */}
         {fichaje.pausas.length > 0 && (

@@ -44,7 +44,8 @@ async def export_my_data(
     writer = csv.writer(output)
     writer.writerow([
         "fecha", "inicio", "fin", "duracion_minutos",
-        "minutos_tarde", "estado", "pausas", "motivo_edicion",
+        "minutos_tarde", "modalidad", "descanso_insuficiente",
+        "estado", "pausas", "motivo_edicion",
     ])
 
     for f in fichajes:
@@ -53,6 +54,8 @@ async def export_my_data(
         fin = f.end_time.strftime("%H:%M") if f.end_time else ""
         duracion = f.total_minutes or ""
         tarde = f.late_minutes or 0
+        modalidad = getattr(f, "modalidad", None) or "presencial"
+        rest_viol = "Sí" if getattr(f, "rest_violation", False) else "No"
         estado = f.status.value if f.status else ""
 
         pausa_parts = []
@@ -64,8 +67,8 @@ async def export_my_data(
         pausas_str = "; ".join(pausa_parts)
 
         writer.writerow([
-            fecha, inicio, fin, duracion, tarde, estado,
-            pausas_str, f.edit_comment or "",
+            fecha, inicio, fin, duracion, tarde, modalidad, rest_viol,
+            estado, pausas_str, f.edit_comment or "",
         ])
 
     csv_bytes = output.getvalue().encode("utf-8-sig")  # BOM for Excel compatibility

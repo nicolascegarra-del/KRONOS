@@ -65,6 +65,7 @@ class FichajeRead(BaseModel):
     end_lng: Optional[float] = None
     out_of_range: Optional[bool] = None
     modalidad: Optional[str] = None
+    rest_violation: Optional[bool] = None
     edit_comment: Optional[str] = None
     pausas: List[PausaRead] = []
 

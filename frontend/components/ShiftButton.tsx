@@ -32,6 +32,21 @@ function utcMs(iso: string): number {
   return new Date(iso.endsWith("Z") ? iso : iso + "Z").getTime();
 }
 
+/** Returns true if worker has been working continuously > 6h without a break ≥ 15 min (Art. 34.4 ET). */
+function needsBreakReminder(fichaje: Fichaje): boolean {
+  if (fichaje.status !== "active") return false;
+  // Find the end time of the most recent pause ≥ 15 min (sufficient break)
+  const lastSufficientBreakMs = fichaje.pausas
+    .filter((p) => p.end_time != null && utcMs(p.end_time!) - utcMs(p.start_time) >= 15 * 60 * 1000)
+    .reduce((latest, p) => {
+      const endMs = utcMs(p.end_time!);
+      return endMs > latest ? endMs : latest;
+    }, 0);
+  // Continuous working time = now minus (last sufficient break end, or shift start)
+  const referenceMs = lastSufficientBreakMs || utcMs(fichaje.start_time);
+  return Date.now() - referenceMs >= 6 * 3600 * 1000;
+}
+
 function computeElapsedSeconds(fichaje: Fichaje): number {
   const startMs = utcMs(fichaje.start_time);
   const completedPauseMs = fichaje.pausas
@@ -200,6 +215,14 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
       {status !== "idle" && (
         <div className="text-4xl font-mono font-bold tabular-nums text-slate-700">
           {elapsed}
+        </div>
+      )}
+
+      {/* Break reminder — Art. 34.4 ET: mandatory 15 min break after 6h */}
+      {fichaje && needsBreakReminder(fichaje) && (
+        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-800 text-sm max-w-xs text-center">
+          <Coffee className="w-4 h-4 shrink-0" />
+          <span>Llevas más de 6h trabajando. Recuerda tomar un descanso de al menos 15 minutos.</span>
         </div>
       )}
 

@@ -16,6 +16,7 @@ interface WorkerSummary {
   email: string;
   total_minutes: number;
   total_hours: number;
+  overtime_minutes: number;
   late_minutes: number;
   fichaje_count: number;
   pause_count: number;
@@ -81,12 +82,13 @@ export default function ReportsPage() {
 
   const exportCSV = () => {
     if (!report) return;
-    const headers = ["Nombre", "Email", "Fichajes", "Horas trabajadas", "Minutos tarde", "Pausas"];
+    const headers = ["Nombre", "Email", "Fichajes", "Horas trabajadas", "Horas extra", "Minutos tarde", "Pausas"];
     const rows = report.workers.map((w) => [
       w.full_name,
       w.email,
       w.fichaje_count,
       w.total_hours,
+      Math.round(w.overtime_minutes / 60 * 100) / 100,
       w.late_minutes,
       w.pause_count,
     ]);
@@ -184,6 +186,7 @@ export default function ReportsPage() {
                       <th className="text-left p-3 font-medium">Trabajador</th>
                       <th className="text-right p-3 font-medium">Fichajes</th>
                       <th className="text-right p-3 font-medium">Horas</th>
+                      <th className="text-right p-3 font-medium">H. extra</th>
                       <th className="text-right p-3 font-medium">Min. tarde</th>
                       <th className="text-right p-3 font-medium">Pausas</th>
                     </tr>
@@ -191,7 +194,7 @@ export default function ReportsPage() {
                   <tbody>
                     {report.workers.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="p-6 text-center text-muted-foreground">
+                        <td colSpan={6} className="p-6 text-center text-muted-foreground">
                           Sin datos para el período seleccionado
                         </td>
                       </tr>
@@ -205,6 +208,13 @@ export default function ReportsPage() {
                           <td className="p-3 text-right">{w.fichaje_count}</td>
                           <td className="p-3 text-right font-medium">
                             {minutesToHoursLabel(w.total_minutes)}
+                          </td>
+                          <td className="p-3 text-right">
+                            {w.overtime_minutes > 0 ? (
+                              <span className="text-orange-600 font-medium">{minutesToHoursLabel(w.overtime_minutes)}</span>
+                            ) : (
+                              <span className="text-slate-400">0</span>
+                            )}
                           </td>
                           <td className="p-3 text-right">
                             {w.late_minutes > 0 ? (

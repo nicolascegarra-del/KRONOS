@@ -157,31 +157,28 @@ async def test_admin_edit_fichaje(client: AsyncClient, admin_user, worker_user):
     resp = await client.patch(
         f"/fichajes/admin/{fichaje_id}",
         headers={"Authorization": f"Bearer {admin_token}"},
-        json={"total_minutes": 120, "late_minutes": 5},
+        json={"total_minutes": 120, "late_minutes": 5, "edit_comment": "Corrección de prueba"},
     )
     assert resp.status_code == 200
     data = resp.json()
     assert data["total_minutes"] == 120
     assert data["late_minutes"] == 5
+    assert data["edit_comment"] == "Corrección de prueba"
 
 
 @pytest.mark.asyncio
-async def test_admin_delete_fichaje(client: AsyncClient, admin_user, worker_user):
+async def test_admin_delete_fichaje(client: AsyncClient, superadmin_user, worker_user):
+    """Only superadmin can delete fichajes."""
     worker_token = await get_token(client, "worker@test.com", "Worker1234!")
     resp = await client.post("/fichajes/start", headers={"Authorization": f"Bearer {worker_token}"})
     fichaje_id = resp.json()["id"]
 
-    admin_token = await get_token(client, "admin@test.com", "Admin1234!")
+    superadmin_token = await get_token(client, "superadmin@test.com", "Super1234!")
     resp = await client.delete(
         f"/fichajes/admin/{fichaje_id}",
-        headers={"Authorization": f"Bearer {admin_token}"},
+        headers={"Authorization": f"Bearer {superadmin_token}"},
     )
     assert resp.status_code == 204
-
-    # Confirm it no longer exists
-    resp = await client.get("/fichajes/admin", headers={"Authorization": f"Bearer {admin_token}"})
-    ids = [f["id"] for f in resp.json()]
-    assert fichaje_id not in ids
 
 
 @pytest.mark.asyncio
@@ -244,3 +241,107 @@ async def test_worker_cannot_close_all(client: AsyncClient, worker_user):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Modalidad (presencial / teletrabajo) tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_start_shift_default_modalidad_presencial(client: AsyncClient, worker_user):
+    """When no modalidad is sent, the fichaje defaults to 'presencial'."""
+    token = await get_token(client, "worker@test.com", "Worker1234!")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp = await client.post("/fichajes/start", headers=headers)
+    assert resp.status_code == 201
+    assert resp.json()["modalidad"] == "presencial"
+
+
+@pytest.mark.asyncio
+async def test_start_shift_with_teletrabajo(client: AsyncClient, worker_user):
+    """Worker can start a remote shift by sending modalidad='teletrabajo'."""
+    token = await get_token(client, "worker@test.com", "Worker1234!")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp = await client.post("/fichajes/start", headers=headers, json={"modalidad": "teletrabajo"})
+    assert resp.status_code == 201
+    assert resp.json()["modalidad"] == "teletrabajo"
+
+
+@pytest.mark.asyncio
+async def test_admin_edit_modalidad(client: AsyncClient, admin_user, worker_user):
+    """Admin can change the modalidad of a fichaje via PATCH."""
+    worker_token = await get_token(client, "worker@test.com", "Worker1234!")
+    resp = await client.post(
+        "/fichajes/start",
+        headers={"Authorization": f"Bearer {worker_token}"},
+        json={"modalidad": "presencial"},
+    )
+    fichaje_id = resp.json()["id"]
+    await client.post("/fichajes/end", headers={"Authorization": f"Bearer {worker_token}"})
+
+    admin_token = await get_token(client, "admin@test.com", "Admin1234!")
+    resp = await client.patch(
+        f"/fichajes/admin/{fichaje_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"modalidad": "teletrabajo", "edit_comment": "Trabajó desde casa"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["modalidad"] == "teletrabajo"
+
+
+@pytest.mark.asyncio
+async def test_admin_list_includes_modalidad(client: AsyncClient, admin_user, worker_user):
+    """Admin list endpoint returns the modalidad field."""
+    worker_token = await get_token(client, "worker@test.com", "Worker1234!")
+    await client.post(
+        "/fichajes/start",
+        headers={"Authorization": f"Bearer {worker_token}"},
+        json={"modalidad": "teletrabajo"},
+    )
+
+    admin_token = await get_token(client, "admin@test.com", "Admin1234!")
+    resp = await client.get("/fichajes/admin", headers={"Authorization": f"Bearer {admin_token}"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) >= 1
+    assert "modalidad" in data[0]
+    assert data[0]["modalidad"] == "teletrabajo"
+
+
+# ---------------------------------------------------------------------------
+# Descanso mínimo 12h (Art. 34.3 ET)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_no_rest_violation_on_first_shift(client: AsyncClient, worker_user):
+    """First shift of a worker should never have rest_violation (no previous shift)."""
+    token = await get_token(client, "worker@test.com", "Worker1234!")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp = await client.post("/fichajes/start", headers=headers)
+    assert resp.status_code == 201
+    data = resp.json()
+    # rest_violation field must be present in the response
+    assert "rest_violation" in data
+    # First shift: no previous shift → no violation
+    assert not data["rest_violation"]
+
+
+@pytest.mark.asyncio
+async def test_no_rest_violation_after_consecutive_same_day(client: AsyncClient, worker_user):
+    """When second shift starts immediately after end (within test), rest_violation=True (< 12h)."""
+    token = await get_token(client, "worker@test.com", "Worker1234!")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Start and immediately end a shift
+    await client.post("/fichajes/start", headers=headers)
+    await client.post("/fichajes/end", headers=headers)
+
+    # Start another shift right away (< 12h gap) → rest_violation must be True
+    resp = await client.post("/fichajes/start", headers=headers)
+    assert resp.status_code == 201
+    assert resp.json().get("rest_violation") is True

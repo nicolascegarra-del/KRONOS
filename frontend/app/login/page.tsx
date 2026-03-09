@@ -12,7 +12,7 @@ import {
   CardDescription,
   CardHeader,
 } from "@/components/ui/card";
-import { Smartphone, ChevronDown, ChevronUp } from "lucide-react";
+import { Smartphone, ChevronDown, ChevronUp, ShieldCheck } from "lucide-react";
 
 function PwaInstructions() {
   const [open, setOpen] = useState(false);
@@ -88,7 +88,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4 gap-6">
       <Card className="w-full max-w-sm shadow-lg">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
@@ -144,6 +144,17 @@ export default function LoginPage() {
           <PwaInstructions />
         </CardContent>
       </Card>
+
+      {/* Compliance footer */}
+      <div className="flex items-center gap-2 text-xs text-slate-400 text-center max-w-sm">
+        <ShieldCheck className="w-4 h-4 shrink-0 text-green-500" />
+        <span>
+          Esta aplicación cumple con el{" "}
+          <strong className="text-slate-500">Art. 34.9 del Estatuto de los Trabajadores</strong>
+          {" "}— registro diario obligatorio de jornada (RDL 8/2019) y el{" "}
+          <strong className="text-slate-500">RGPD</strong>.
+        </span>
+      </div>
     </div>
   );
 }

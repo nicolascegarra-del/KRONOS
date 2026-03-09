@@ -67,6 +67,15 @@ async def _run_column_migrations() -> None:
         await conn.execute(text(
             'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS privacy_notice_date TIMESTAMP'
         ))
+        await conn.execute(text(
+            'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS rest_violation BOOLEAN'
+        ))
+        await conn.execute(text(
+            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS scheduled_end TIME'
+        ))
+        await conn.execute(text(
+            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS work_center_id UUID REFERENCES work_center(id)'
+        ))
         # Workers already using the app are assumed to have implicitly consented
         await conn.execute(text(
             "UPDATE \"user\" SET geo_consent = true, geo_consent_date = NOW() "

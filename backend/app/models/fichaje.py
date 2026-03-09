@@ -31,6 +31,7 @@ class Fichaje(SQLModel, table=True):
     end_lng: Optional[float] = None
     out_of_range: Optional[bool] = None  # None = no check, True = outside work center
     modalidad: Optional[str] = Field(default=None)  # "presencial" | "teletrabajo"
+    rest_violation: Optional[bool] = None   # True if < 12h rest since last shift (Art. 34.3 ET)
     edit_comment: Optional[str] = None
     last_edited_by_id: Optional[UUID] = None
     last_edited_at: Optional[datetime] = None

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Pencil, Trash2, FileX, Users } from "lucide-react";
+import { Pencil, Trash2, FileX, Users, ChevronDown, X } from "lucide-react";
+
+interface CompanyOption {
+  id: string;
+  name: string;
+}
 
 interface UserRow {
   id: string;
@@ -54,8 +59,119 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
+// --- Searchable company selector ---
+function CompanySelect({
+  companies,
+  value,
+  onChange,
+}: {
+  companies: CompanyOption[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const selected = companies.find((c) => c.id === value) ?? null;
+  const filtered = companies.filter((c) =>
+    c.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleSelect = (id: string) => {
+    onChange(id);
+    setOpen(false);
+    setSearch("");
+  };
+
+  const handleClear = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange("");
+    setSearch("");
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      {/* Trigger button */}
+      <button
+        type="button"
+        onClick={() => { setOpen((o) => !o); setSearch(""); }}
+        className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-ring"
+      >
+        <span className={selected ? "text-foreground" : "text-muted-foreground"}>
+          {selected ? selected.name : "Sin empresa"}
+        </span>
+        <div className="flex items-center gap-1 ml-2 shrink-0">
+          {selected && (
+            <span
+              onClick={handleClear}
+              className="cursor-pointer text-muted-foreground hover:text-foreground"
+              title="Quitar empresa"
+            >
+              <X className="w-3 h-3" />
+            </span>
+          )}
+          <ChevronDown className="w-4 h-4 text-muted-foreground" />
+        </div>
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border bg-white shadow-lg">
+          {/* Search input */}
+          <div className="p-2 border-b">
+            <input
+              autoFocus
+              type="text"
+              placeholder="Buscar empresa..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded border border-input px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
+          <ul className="max-h-48 overflow-y-auto py-1">
+            {/* None option */}
+            <li
+              onClick={() => handleSelect("")}
+              className={`cursor-pointer px-3 py-2 text-sm hover:bg-slate-100 ${value === "" ? "bg-slate-50 font-medium" : ""}`}
+            >
+              <span className="text-muted-foreground italic">Sin empresa</span>
+            </li>
+            {filtered.length === 0 ? (
+              <li className="px-3 py-2 text-sm text-muted-foreground">No hay resultados</li>
+            ) : (
+              filtered.map((c) => (
+                <li
+                  key={c.id}
+                  onClick={() => handleSelect(c.id)}
+                  className={`cursor-pointer px-3 py-2 text-sm hover:bg-slate-100 ${value === c.id ? "bg-blue-50 text-blue-700 font-medium" : ""}`}
+                >
+                  {c.name}
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SuperadminUsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,8 +196,12 @@ export default function SuperadminUsersPage() {
 
   const load = async () => {
     try {
-      const res = await api.get<UserRow[]>("/superadmin/users");
-      setUsers(res.data);
+      const [usersRes, companiesRes] = await Promise.all([
+        api.get<UserRow[]>("/superadmin/users"),
+        api.get<CompanyOption[]>("/companies"),
+      ]);
+      setUsers(usersRes.data);
+      setCompanies(companiesRes.data);
       setSelected(new Set());
     } catch {
       setError("Error al cargar los usuarios");
@@ -397,12 +517,11 @@ export default function SuperadminUsersPage() {
               </select>
             </div>
             <div className="space-y-1">
-              <Label>ID de empresa (UUID, dejar vacío para ninguna)</Label>
-              <Input
+              <Label>Empresa</Label>
+              <CompanySelect
+                companies={companies}
                 value={form.company_id}
-                onChange={(e) => setForm((p) => ({ ...p, company_id: e.target.value }))}
-                placeholder="xxxxxxxx-xxxx-..."
-                className="font-mono text-xs"
+                onChange={(id) => setForm((p) => ({ ...p, company_id: id }))}
               />
             </div>
             <div className="space-y-1">

@@ -19,6 +19,7 @@ interface Fichaje {
   status: "active" | "paused" | "finished";
   total_minutes?: number;
   late_minutes?: number;
+  modalidad?: string;
   pausas: Pausa[];
 }
 
@@ -27,6 +28,8 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   useEffect(() => {
     api
@@ -39,12 +42,17 @@ export default function HistoryPage() {
   const handleExport = async () => {
     setDownloading(true);
     try {
-      const res = await api.get("/workers/me/export", { responseType: "blob" });
+      const params: Record<string, string> = {};
+      if (fromDate) params.from_date = fromDate;
+      if (toDate) params.to_date = toDate;
+      const res = await api.get("/workers/me/export", { params, responseType: "blob" });
       const url = URL.createObjectURL(res.data);
       const a = document.createElement("a");
-      const month = new Date().toISOString().slice(0, 7);
+      const label = fromDate || toDate
+        ? `${fromDate || "inicio"}_${toDate || "hoy"}`
+        : new Date().toISOString().slice(0, 7);
       a.href = url;
-      a.download = `fichajes_${month}.csv`;
+      a.download = `fichajes_${label}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -56,16 +64,48 @@ export default function HistoryPage() {
 
   return (
     <div className="px-4 py-6 max-w-2xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-semibold">Mi Historial</h1>
-        <button
-          onClick={handleExport}
-          disabled={downloading}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-300 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-        >
-          <Download className="w-4 h-4" />
-          {downloading ? "Descargando..." : "Descargar mis datos"}
-        </button>
+      <h1 className="text-xl font-semibold mb-4">Mi Historial</h1>
+
+      {/* Export panel */}
+      <div className="mb-6 p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
+        <p className="text-sm font-medium text-slate-700">Descargar mis datos</p>
+        <div className="flex flex-wrap gap-3 items-end">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-500">Desde</label>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="border rounded-lg px-3 py-1.5 text-sm bg-white"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-500">Hasta</label>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="border rounded-lg px-3 py-1.5 text-sm bg-white"
+            />
+          </div>
+          <button
+            onClick={handleExport}
+            disabled={downloading}
+            className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 disabled:opacity-50"
+          >
+            <Download className="w-4 h-4" />
+            {downloading ? "Descargando..." : "Descargar CSV"}
+          </button>
+        </div>
+        {(fromDate || toDate) && (
+          <p className="text-xs text-slate-400">
+            {fromDate && toDate
+              ? `Exportando fichajes del ${fromDate} al ${toDate}`
+              : fromDate
+              ? `Exportando fichajes desde ${fromDate}`
+              : `Exportando fichajes hasta ${toDate}`}
+          </p>
+        )}
       </div>
 
       {loading && (

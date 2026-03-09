@@ -11,7 +11,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, Pencil, CheckCircle2, Trash2, MapPin } from "lucide-react";
+import { Search, Pencil, CheckCircle2, MapPin, MessageSquare } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 import { minutesToHoursLabel } from "@/lib/utils";
 
@@ -41,11 +42,14 @@ interface FichajeAdmin {
   status: "active" | "paused" | "finished";
   total_minutes?: number;
   late_minutes?: number;
+  modalidad?: string;
   start_lat?: number;
   start_lng?: number;
   end_lat?: number;
   end_lng?: number;
   out_of_range?: boolean;
+  rest_violation?: boolean;
+  edit_comment?: string;
   pausas: PausaAdmin[];
 }
 
@@ -147,8 +151,10 @@ interface EditForm {
   start_time: string;
   end_time: string;
   status: string;
+  modalidad: string;
   total_minutes: string;
   late_minutes: string;
+  edit_comment: string;
 }
 
 function fmtDatetime(iso?: string): string {
@@ -189,8 +195,10 @@ export default function AdminFichajesPage() {
     start_time: "",
     end_time: "",
     status: "",
+    modalidad: "presencial",
     total_minutes: "",
     late_minutes: "",
+    edit_comment: "",
   });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -225,16 +233,6 @@ export default function AdminFichajesPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar este fichaje? Esta acción no se puede deshacer.")) return;
-    try {
-      await api.delete(`/fichajes/admin/${id}`);
-      await fetchFichajes();
-    } catch (e: any) {
-      setError(e.response?.data?.detail || "Error al eliminar el fichaje");
-    }
-  };
-
   const openEdit = (f: FichajeAdmin) => {
     setEditTarget(f);
     setSaveError(null);
@@ -242,20 +240,27 @@ export default function AdminFichajesPage() {
       start_time: toInputDatetime(f.start_time),
       end_time: toInputDatetime(f.end_time),
       status: f.status,
+      modalidad: f.modalidad ?? "presencial",
       total_minutes: f.total_minutes != null ? String(f.total_minutes) : "",
       late_minutes: f.late_minutes != null ? String(f.late_minutes) : "",
+      edit_comment: "",
     });
   };
 
   const handleSave = async () => {
     if (!editTarget) return;
+    if (editForm.edit_comment.trim().length < 3) {
+      setSaveError("El motivo del cambio es obligatorio (mínimo 3 caracteres)");
+      return;
+    }
     setSaving(true);
     setSaveError(null);
     try {
-      const body: Record<string, string | number> = {};
+      const body: Record<string, string | number> = { edit_comment: editForm.edit_comment.trim() };
       if (editForm.start_time) body.start_time = editForm.start_time + ":00";
       if (editForm.end_time) body.end_time = editForm.end_time + ":00";
       if (editForm.status) body.status = editForm.status;
+      if (editForm.modalidad) body.modalidad = editForm.modalidad;
       if (editForm.total_minutes !== "") body.total_minutes = Number(editForm.total_minutes);
       if (editForm.late_minutes !== "") body.late_minutes = Number(editForm.late_minutes);
       await api.patch(`/fichajes/admin/${editTarget.id}`, body);
@@ -324,20 +329,22 @@ export default function AdminFichajesPage() {
                 <th className="text-left p-3 font-medium">Fin</th>
                 <th className="text-right p-3 font-medium">Duración</th>
                 <th className="text-center p-3 font-medium">Estado</th>
+                <th className="text-center p-3 font-medium">Modalidad</th>
                 <th className="text-right p-3 font-medium">Pausas</th>
+                <th className="text-left p-3 font-medium">Nota edición</th>
                 <th className="text-center p-3 font-medium">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {fichajes.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-6 text-center text-muted-foreground">
+                  <td colSpan={9} className="p-6 text-center text-muted-foreground">
                     {loading ? "Cargando..." : "Sin fichajes para los filtros seleccionados"}
                   </td>
                 </tr>
               ) : (
                 fichajes.map((f) => (
-                  <tr key={f.id} className="border-b last:border-0 hover:bg-slate-50">
+                  <tr key={f.id} className="border-b last:border-0 hover:bg-slate-50 align-top">
                     <td className="p-3">
                       {f.user ? (
                         <>
@@ -361,9 +368,36 @@ export default function AdminFichajesPage() {
                             Fuera de rango
                           </span>
                         )}
+                        {f.rest_violation && (
+                          <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700 whitespace-nowrap" title="Menos de 12h de descanso entre jornadas (Art. 34.3 ET)">
+                            &lt;12h descanso
+                          </span>
+                        )}
+                        {f.total_minutes != null && f.total_minutes > 540 && (
+                          <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-700 whitespace-nowrap" title="Jornada superior a 9h (Art. 34.1 ET)">
+                            Jornada &gt;9h
+                          </span>
+                        )}
                       </div>
                     </td>
+                    <td className="p-3 text-center">
+                      {f.modalidad === "teletrabajo" ? (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">Teletrabajo</span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Presencial</span>
+                      )}
+                    </td>
                     <td className="p-3 text-right">{f.pausas.length}</td>
+                    <td className="p-3 max-w-[160px]">
+                      {f.edit_comment ? (
+                        <span className="flex items-start gap-1 text-xs text-slate-600" title={f.edit_comment}>
+                          <MessageSquare className="w-3 h-3 mt-0.5 shrink-0 text-amber-500" />
+                          <span className="line-clamp-2">{f.edit_comment}</span>
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
                     <td className="p-3">
                       <div className="flex items-center justify-center gap-2">
                         <Button
@@ -394,15 +428,6 @@ export default function AdminFichajesPage() {
                         >
                           <Pencil className="w-3 h-3" />
                           Editar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDelete(f.id)}
-                          className="flex items-center gap-1 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          Eliminar
                         </Button>
                       </div>
                     </td>
@@ -454,6 +479,17 @@ export default function AdminFichajesPage() {
               </select>
             </div>
             <div className="space-y-1">
+              <Label>Modalidad</Label>
+              <select
+                value={editForm.modalidad}
+                onChange={(e) => setEditForm((p) => ({ ...p, modalidad: e.target.value }))}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              >
+                <option value="presencial">Presencial</option>
+                <option value="teletrabajo">Teletrabajo</option>
+              </select>
+            </div>
+            <div className="space-y-1">
               <Label>Minutos trabajados (opcional)</Label>
               <Input
                 type="number"
@@ -470,6 +506,17 @@ export default function AdminFichajesPage() {
                 min={0}
                 value={editForm.late_minutes}
                 onChange={(e) => setEditForm((p) => ({ ...p, late_minutes: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>
+                Motivo del cambio <span className="text-destructive">*</span>
+              </Label>
+              <Textarea
+                placeholder="Describe el motivo de la edición (obligatorio)"
+                rows={3}
+                value={editForm.edit_comment}
+                onChange={(e) => setEditForm((p) => ({ ...p, edit_comment: e.target.value }))}
               />
             </div>
 

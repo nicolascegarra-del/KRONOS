@@ -10,6 +10,7 @@ class WorkerHoursSummary(BaseModel):
     email: str
     total_minutes: int
     total_hours: float
+    overtime_minutes: int = 0
     late_minutes: int
     fichaje_count: int
     pause_count: int

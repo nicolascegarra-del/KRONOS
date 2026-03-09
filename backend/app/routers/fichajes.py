@@ -73,9 +73,10 @@ async def start_fichaje(
             detail="A shift is already active",
         )
 
+    now = _now()
     fichaje = Fichaje(
         user_id=current_user.id,
-        start_time=_now(),
+        start_time=now,
         late_minutes=0,
         start_lat=body.coords.lat if body.coords else None,
         start_lng=body.coords.lng if body.coords else None,
@@ -85,6 +86,23 @@ async def start_fichaje(
     await session.flush()
 
     fichaje.late_minutes = calculate_late_minutes(current_user, fichaje)
+
+    # Check minimum 12h rest between shifts (Art. 34.3 ET)
+    last_result = await session.execute(
+        select(Fichaje)
+        .where(
+            Fichaje.user_id == current_user.id,
+            Fichaje.status == FichajeStatus.finished,
+            Fichaje.end_time.isnot(None),
+        )
+        .order_by(Fichaje.end_time.desc())
+        .limit(1)
+    )
+    last_fichaje = last_result.scalar_one_or_none()
+    if last_fichaje and last_fichaje.end_time:
+        rest_seconds = (now - last_fichaje.end_time).total_seconds()
+        if rest_seconds < 12 * 3600:
+            fichaje.rest_violation = True
 
     # Geofence check: only if company has geo_enabled=True, work centers exist, and coords provided
     if body.coords and current_user.company_id:

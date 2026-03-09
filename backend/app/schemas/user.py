@@ -12,6 +12,7 @@ class UserCreate(BaseModel):
     password: str
     role: UserRole = UserRole.worker
     scheduled_start: Optional[time] = None
+    scheduled_end: Optional[time] = None
     dni: Optional[str] = None
 
 
@@ -19,6 +20,7 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     role: Optional[UserRole] = None
     scheduled_start: Optional[time] = None
+    scheduled_end: Optional[time] = None
     is_active: Optional[bool] = None
     dni: Optional[str] = None
 
@@ -29,6 +31,7 @@ class SuperadminUserUpdate(BaseModel):
     password: Optional[str] = None
     role: Optional[UserRole] = None
     scheduled_start: Optional[time] = None
+    scheduled_end: Optional[time] = None
     is_active: Optional[bool] = None
     company_id: Optional[UUID] = None
 
@@ -40,6 +43,7 @@ class UserRead(BaseModel):
     role: UserRole
     is_active: bool
     scheduled_start: Optional[time] = None
+    scheduled_end: Optional[time] = None
     created_at: datetime
     company_id: Optional[UUID] = None
     company_name: Optional[str] = None

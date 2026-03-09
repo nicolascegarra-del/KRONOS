@@ -58,6 +58,15 @@ async def hours_report(
     )
     fichajes = result.scalars().all()
 
+    def _scheduled_daily_minutes(user: User) -> int:
+        """Return the scheduled work minutes per day; default 480 (8h) if not configured."""
+        if user and user.scheduled_start and user.scheduled_end:
+            start_m = user.scheduled_start.hour * 60 + user.scheduled_start.minute
+            end_m = user.scheduled_end.hour * 60 + user.scheduled_end.minute
+            diff = end_m - start_m
+            return diff if diff > 0 else 480
+        return 480  # legal default 8h
+
     # Aggregate per user
     workers_map: dict[UUID, WorkerHoursSummary] = {}
     for f in fichajes:
@@ -69,12 +78,16 @@ async def hours_report(
                 email=f.user.email if f.user else "",
                 total_minutes=0,
                 total_hours=0.0,
+                overtime_minutes=0,
                 late_minutes=0,
                 fichaje_count=0,
                 pause_count=0,
             )
         summary = workers_map[uid]
-        summary.total_minutes += f.total_minutes or 0
+        fichaje_minutes = f.total_minutes or 0
+        scheduled = _scheduled_daily_minutes(f.user)
+        summary.total_minutes += fichaje_minutes
+        summary.overtime_minutes += max(0, fichaje_minutes - scheduled)
         summary.late_minutes += f.late_minutes or 0
         summary.fichaje_count += 1
         summary.pause_count += len(f.pausas)
@@ -129,8 +142,8 @@ async def fichajes_raw_export(
     writer = csv.writer(output)
     writer.writerow([
         "trabajador", "dni", "email",
-        "fecha", "inicio", "fin", "duracion_minutos", "minutos_tarde",
-        "estado", "modalidad", "pausas",
+        "fecha", "inicio", "fin", "duracion_minutos", "minutos_ordinarios", "minutos_extraordinarios", "minutos_tarde",
+        "estado", "modalidad", "descanso_insuficiente", "pausas",
         "motivo_edicion", "editado_por", "editado_fecha",
     ])
 
@@ -150,15 +163,28 @@ async def fichajes_raw_export(
         editor_name = editors.get(f.last_edited_by_id, "") if f.last_edited_by_id else ""
         edited_at = f.last_edited_at.strftime("%Y-%m-%d %H:%M") if f.last_edited_at else ""
 
+        fichaje_min = f.total_minutes or 0
+        if u and u.scheduled_start and u.scheduled_end:
+            sched_start_m = u.scheduled_start.hour * 60 + u.scheduled_start.minute
+            sched_end_m = u.scheduled_end.hour * 60 + u.scheduled_end.minute
+            sched_daily = max(0, sched_end_m - sched_start_m)
+        else:
+            sched_daily = 480  # 8h default
+        ordinary_min = min(fichaje_min, sched_daily)
+        overtime_min = max(0, fichaje_min - sched_daily)
+
         writer.writerow([
             u.full_name if u else "",
             u.dni or "" if u else "",
             u.email if u else "",
             fecha, inicio, fin,
-            f.total_minutes or "",
+            fichaje_min or "",
+            ordinary_min,
+            overtime_min,
             f.late_minutes or 0,
             f.status.value if f.status else "",
             getattr(f, "modalidad", "") or "",
+            "Sí" if getattr(f, "rest_violation", False) else "No",
             "; ".join(pausa_parts),
             f.edit_comment or "",
             editor_name,

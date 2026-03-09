@@ -80,6 +80,7 @@ async def create_user(
         hashed_password=hash_password(body.password),
         role=body.role,
         scheduled_start=body.scheduled_start,
+        scheduled_end=body.scheduled_end,
         company_id=admin.company_id,
     )
     session.add(user)

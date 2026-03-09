@@ -27,6 +27,8 @@ class User(SQLModel, table=True):
     role: UserRole = Field(default=UserRole.worker)
     is_active: bool = True
     scheduled_start: Optional[time] = None  # e.g. 09:00 for lateness alerts
+    scheduled_end: Optional[time] = None    # e.g. 18:00 for overtime calculation (Art. 35 ET)
+    work_center_id: Optional[UUID] = Field(default=None, foreign_key="work_center.id")  # assigned center; None = any
     created_at: datetime = Field(default_factory=datetime.utcnow)
     company_id: Optional[UUID] = Field(default=None, foreign_key="company.id")
 

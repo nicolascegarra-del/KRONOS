@@ -53,6 +53,8 @@ export default function SettingsPage() {
   // Auto-close settings
   const [autoCloseEnabled, setAutoCloseEnabled] = useState(false);
   const [autoCloseHours, setAutoCloseHours] = useState(12);
+  const [savingAutoClose, setSavingAutoClose] = useState(false);
+  const [autoCloseMsg, setAutoCloseMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [closingAll, setClosingAll] = useState(false);
   const [closeAllMsg, setCloseAllMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -123,6 +125,24 @@ export default function SettingsPage() {
       setNotifMsg({ ok: false, text: e.response?.data?.detail || "Error al guardar" });
     } finally {
       setSavingNotif(false);
+    }
+  };
+
+  const handleSaveAutoClose = async () => {
+    setSavingAutoClose(true);
+    setAutoCloseMsg(null);
+    try {
+      await api.put("/settings/app", {
+        late_alert_enabled: notifEnabled,
+        late_alert_minutes: notifMinutes,
+        auto_close_enabled: autoCloseEnabled,
+        auto_close_hours: autoCloseHours,
+      });
+      setAutoCloseMsg({ ok: true, text: "Configuración de cierre automático guardada." });
+    } catch (e: any) {
+      setAutoCloseMsg({ ok: false, text: e.response?.data?.detail || "Error al guardar" });
+    } finally {
+      setSavingAutoClose(false);
     }
   };
 
@@ -373,14 +393,20 @@ export default function SettingsPage() {
           </div>
         )}
 
+        {autoCloseMsg && (
+          <p className={`text-sm ${autoCloseMsg.ok ? "text-green-600" : "text-destructive"}`}>
+            {autoCloseMsg.text}
+          </p>
+        )}
+
         <Button
           type="button"
-          onClick={handleSaveNotif}
-          disabled={savingNotif}
+          onClick={handleSaveAutoClose}
+          disabled={savingAutoClose}
           className="flex items-center gap-2"
         >
           <Save className="w-4 h-4" />
-          {savingNotif ? "Guardando..." : "Guardar cierre automático"}
+          {savingAutoClose ? "Guardando..." : "Guardar cierre automático"}
         </Button>
 
         <div className="border-t pt-4 space-y-3">
