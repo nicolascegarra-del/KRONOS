@@ -19,10 +19,10 @@ class Fichaje(SQLModel, table=True):
     __tablename__ = "fichaje"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    user_id: UUID = Field(foreign_key="user.id")
-    start_time: datetime
+    user_id: UUID = Field(foreign_key="user.id", index=True)
+    start_time: datetime = Field(index=True)
     end_time: Optional[datetime] = None
-    status: FichajeStatus = Field(default=FichajeStatus.active)
+    status: FichajeStatus = Field(default=FichajeStatus.active, index=True)
     total_minutes: Optional[int] = None   # computed on end
     late_minutes: Optional[int] = None    # minutes after scheduled_start
     start_lat: Optional[float] = None

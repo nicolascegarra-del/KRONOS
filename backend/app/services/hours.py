@@ -24,6 +24,16 @@ def calculate_total_minutes(fichaje: Fichaje, pausas: list[Pausa]) -> int:
     return max(0, gross - calculate_pause_minutes(pausas))
 
 
+def scheduled_daily_minutes(user: User) -> int:
+    """Return scheduled work minutes per day; default 480 (8h) if not configured."""
+    if user and user.scheduled_start and user.scheduled_end:
+        start_m = user.scheduled_start.hour * 60 + user.scheduled_start.minute
+        end_m = user.scheduled_end.hour * 60 + user.scheduled_end.minute
+        diff = end_m - start_m
+        return diff if diff > 0 else 480
+    return 480  # legal default 8h
+
+
 def calculate_late_minutes(user: User, fichaje: Fichaje) -> int:
     """Minutes after scheduled_start the worker clocked in. 0 if on time."""
     if user.scheduled_start is None:

@@ -20,6 +20,7 @@ from app.schemas.fichaje import (
     FichajeAdminRead, FichajeAdminUpdate, FichajeRead,
     PauseRequest, StartRequest, EndRequest, ResumeRequest,
 )
+from app.services.access_log import log_admin_access
 from app.services.geofence import is_within_any_work_center
 from app.services.hours import calculate_total_minutes, calculate_late_minutes
 
@@ -281,20 +282,6 @@ async def get_my_fichajes(
 # ---------------------------------------------------------------------------
 
 
-async def _log_admin_access(admin_id: UUID, action: str, details: str | None = None) -> None:
-    """Fire-and-forget: write an AdminAccessLog row using a fresh session."""
-    try:
-        import json
-        from app.database import AsyncSessionLocal
-        from app.models.adminaccesslog import AdminAccessLog
-        async with AsyncSessionLocal() as s:
-            log = AdminAccessLog(admin_id=admin_id, action=action, details=details)
-            s.add(log)
-            await s.commit()
-    except Exception:
-        pass
-
-
 @router.get("/admin", response_model=list[FichajeAdminRead])
 async def admin_list_fichajes(
     user_id: Optional[UUID] = None,
@@ -328,7 +315,7 @@ async def admin_list_fichajes(
         "from_date": from_date.isoformat() if from_date else None,
         "to_date": to_date.isoformat() if to_date else None,
     })
-    asyncio.create_task(_log_admin_access(admin.id, "VIEW_FICHAJES", details))
+    asyncio.create_task(log_admin_access(admin.id, "VIEW_FICHAJES", details))
     return rows
 
 

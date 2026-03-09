@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
@@ -78,16 +78,16 @@ async def update_any_user(
 async def _delete_fichajes_for_users(session: AsyncSession, user_ids: list) -> int:
     """Delete all fichajes (and their pausas) for the given user IDs. Returns count."""
     fichaje_result = await session.execute(
-        select(Fichaje).where(Fichaje.user_id.in_(user_ids))
+        select(Fichaje.id).where(Fichaje.user_id.in_(user_ids))
     )
-    fichajes = fichaje_result.scalars().all()
-    for f in fichajes:
-        pausa_result = await session.execute(select(Pausa).where(Pausa.fichaje_id == f.id))
-        for p in pausa_result.scalars().all():
-            await session.delete(p)
-        await session.delete(f)
+    fichaje_ids = [row[0] for row in fichaje_result.all()]
+    if not fichaje_ids:
+        return 0
+    # Bulk delete pausas in a single query (avoids N+1)
+    await session.execute(delete(Pausa).where(Pausa.fichaje_id.in_(fichaje_ids)))
+    await session.execute(delete(Fichaje).where(Fichaje.id.in_(fichaje_ids)))
     await session.commit()
-    return len(fichajes)
+    return len(fichaje_ids)
 
 
 @router.delete("/fichajes", status_code=status.HTTP_200_OK)

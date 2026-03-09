@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { LatenessAlert } from "@/components/LatenessAlert";
 import { minutesToHoursLabel } from "@/lib/utils";
 import { format, subDays } from "date-fns";
+import { downloadBlob } from "@/lib/downloadBlob";
 import { Search, Download } from "lucide-react";
 
 interface WorkerSummary {
@@ -72,12 +73,7 @@ export default function ReportsPage() {
       params: { from_date: fromDate, to_date: toDate },
       responseType: "blob",
     });
-    const url = URL.createObjectURL(res.data);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `registros_jornada_${fromDate}_${toDate}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(res.data, `registros_jornada_${fromDate}_${toDate}.csv`, "text/csv");
   };
 
   const exportCSV = () => {
@@ -93,13 +89,7 @@ export default function ReportsPage() {
       w.pause_count,
     ]);
     const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `informe_${fromDate}_${toDate}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(csv, `informe_${fromDate}_${toDate}.csv`, "text/csv");
   };
 
   return (

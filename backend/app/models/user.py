@@ -24,13 +24,13 @@ class User(SQLModel, table=True):
     email: str = Field(unique=True, index=True)
     full_name: str
     hashed_password: str
-    role: UserRole = Field(default=UserRole.worker)
+    role: UserRole = Field(default=UserRole.worker, index=True)
     is_active: bool = True
     scheduled_start: Optional[time] = None  # e.g. 09:00 for lateness alerts
     scheduled_end: Optional[time] = None    # e.g. 18:00 for overtime calculation (Art. 35 ET)
     work_center_id: Optional[UUID] = Field(default=None, foreign_key="work_center.id")  # assigned center; None = any
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    company_id: Optional[UUID] = Field(default=None, foreign_key="company.id")
+    company_id: Optional[UUID] = Field(default=None, foreign_key="company.id", index=True)
 
     dni: Optional[str] = Field(default=None)
     geo_consent: Optional[bool] = Field(default=None)

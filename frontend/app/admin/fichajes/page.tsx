@@ -12,6 +12,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Search, Pencil, CheckCircle2, MapPin, MessageSquare } from "lucide-react";
+import { StatusBadge } from "@/components/StatusBadge";
+import { ModalidadBadge } from "@/components/ModalidadBadge";
 import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 import { minutesToHoursLabel } from "@/lib/utils";
@@ -165,20 +167,6 @@ function fmtDatetime(iso?: string): string {
 function toInputDatetime(iso?: string): string {
   if (!iso) return "";
   return iso.slice(0, 16);
-}
-
-function StatusBadge({ s }: { s: string }) {
-  const cfg: Record<string, { label: string; cls: string }> = {
-    active: { label: "Activo", cls: "bg-green-100 text-green-700" },
-    paused: { label: "Pausado", cls: "bg-amber-100 text-amber-700" },
-    finished: { label: "Finalizado", cls: "bg-slate-100 text-slate-600" },
-  };
-  const c = cfg[s] ?? { label: s, cls: "bg-slate-100 text-slate-500" };
-  return (
-    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${c.cls}`}>
-      {c.label}
-    </span>
-  );
 }
 
 export default function AdminFichajesPage() {
@@ -381,11 +369,7 @@ export default function AdminFichajesPage() {
                       </div>
                     </td>
                     <td className="p-3 text-center">
-                      {f.modalidad === "teletrabajo" ? (
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">Teletrabajo</span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Presencial</span>
-                      )}
+                      <ModalidadBadge modalidad={f.modalidad} />
                     </td>
                     <td className="p-3 text-right">{f.pausas.length}</td>
                     <td className="p-3 max-w-[160px]">

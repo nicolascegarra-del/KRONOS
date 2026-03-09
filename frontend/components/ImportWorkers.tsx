@@ -4,6 +4,7 @@ import React, { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { Download, Upload, CheckCircle, AlertCircle } from "lucide-react";
+import { downloadBlob } from "@/lib/downloadBlob";
 
 interface ImportResult {
   created: string[];
@@ -18,12 +19,7 @@ export function ImportWorkers() {
 
   const handleDownloadTemplate = async () => {
     const res = await api.get("/users/template", { responseType: "blob" });
-    const url = URL.createObjectURL(res.data);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "fichajes_template.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(res.data, "fichajes_template.csv", "text/csv");
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { FichajeCard } from "@/components/FichajeCard";
 import { Clock, Download } from "lucide-react";
+import { downloadBlob } from "@/lib/downloadBlob";
 
 interface Pausa {
   id: string;
@@ -46,15 +47,10 @@ export default function HistoryPage() {
       if (fromDate) params.from_date = fromDate;
       if (toDate) params.to_date = toDate;
       const res = await api.get("/workers/me/export", { params, responseType: "blob" });
-      const url = URL.createObjectURL(res.data);
-      const a = document.createElement("a");
       const label = fromDate || toDate
         ? `${fromDate || "inicio"}_${toDate || "hoy"}`
         : new Date().toISOString().slice(0, 7);
-      a.href = url;
-      a.download = `fichajes_${label}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadBlob(res.data, `fichajes_${label}.csv`, "text/csv");
     } catch {
       // silently ignore
     } finally {

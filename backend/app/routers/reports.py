@@ -16,20 +16,8 @@ from app.models.fichaje import Fichaje, FichajeStatus
 from app.models.pausa import Pausa
 from app.models.user import User
 from app.schemas.reports import HoursReport, LatenessAlert, WorkerHoursSummary
-from app.services.hours import calculate_pause_minutes
-
-
-async def _log_admin_access(admin_id: UUID, action: str, details: str | None = None) -> None:
-    try:
-        import json
-        from app.database import AsyncSessionLocal
-        from app.models.adminaccesslog import AdminAccessLog
-        async with AsyncSessionLocal() as s:
-            log = AdminAccessLog(admin_id=admin_id, action=action, details=details)
-            s.add(log)
-            await s.commit()
-    except Exception:
-        pass
+from app.services.hours import calculate_pause_minutes, scheduled_daily_minutes
+from app.services.access_log import log_admin_access
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -58,15 +46,6 @@ async def hours_report(
     )
     fichajes = result.scalars().all()
 
-    def _scheduled_daily_minutes(user: User) -> int:
-        """Return the scheduled work minutes per day; default 480 (8h) if not configured."""
-        if user and user.scheduled_start and user.scheduled_end:
-            start_m = user.scheduled_start.hour * 60 + user.scheduled_start.minute
-            end_m = user.scheduled_end.hour * 60 + user.scheduled_end.minute
-            diff = end_m - start_m
-            return diff if diff > 0 else 480
-        return 480  # legal default 8h
-
     # Aggregate per user
     workers_map: dict[UUID, WorkerHoursSummary] = {}
     for f in fichajes:
@@ -85,7 +64,7 @@ async def hours_report(
             )
         summary = workers_map[uid]
         fichaje_minutes = f.total_minutes or 0
-        scheduled = _scheduled_daily_minutes(f.user)
+        scheduled = scheduled_daily_minutes(f.user)
         summary.total_minutes += fichaje_minutes
         summary.overtime_minutes += max(0, fichaje_minutes - scheduled)
         summary.late_minutes += f.late_minutes or 0
@@ -97,7 +76,7 @@ async def hours_report(
 
     import json
     details = json.dumps({"from_date": from_date.isoformat(), "to_date": to_date.isoformat()})
-    asyncio.create_task(_log_admin_access(admin.id, "EXPORT_REPORT", details))
+    asyncio.create_task(log_admin_access(admin.id, "EXPORT_REPORT", details))
     return HoursReport(
         from_date=from_date,
         to_date=to_date,

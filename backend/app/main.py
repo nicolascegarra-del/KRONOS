@@ -81,6 +81,28 @@ async def _run_column_migrations() -> None:
             "UPDATE \"user\" SET geo_consent = true, geo_consent_date = NOW() "
             "WHERE role = 'worker' AND geo_consent IS NULL"
         ))
+        # Performance indexes (idempotent)
+        await conn.execute(text(
+            'CREATE INDEX IF NOT EXISTS ix_fichaje_user_id ON fichaje (user_id)'
+        ))
+        await conn.execute(text(
+            'CREATE INDEX IF NOT EXISTS ix_fichaje_status ON fichaje (status)'
+        ))
+        await conn.execute(text(
+            'CREATE INDEX IF NOT EXISTS ix_fichaje_start_time ON fichaje (start_time)'
+        ))
+        await conn.execute(text(
+            'CREATE INDEX IF NOT EXISTS ix_user_company_id ON "user" (company_id)'
+        ))
+        await conn.execute(text(
+            'CREATE INDEX IF NOT EXISTS ix_user_role ON "user" (role)'
+        ))
+        await conn.execute(text(
+            'CREATE INDEX IF NOT EXISTS ix_admin_access_log_admin_id ON admin_access_log (admin_id)'
+        ))
+        await conn.execute(text(
+            'CREATE INDEX IF NOT EXISTS ix_admin_access_log_accessed_at ON admin_access_log (accessed_at)'
+        ))
 
 
 @asynccontextmanager
