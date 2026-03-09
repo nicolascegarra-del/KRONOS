@@ -41,6 +41,9 @@ async def _run_column_migrations() -> None:
     from app.database import engine
     async with engine.begin() as conn:
         await conn.execute(text(
+            'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS modalidad VARCHAR'
+        ))
+        await conn.execute(text(
             'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS edit_comment TEXT'
         ))
         await conn.execute(text(
@@ -57,6 +60,12 @@ async def _run_column_migrations() -> None:
         ))
         await conn.execute(text(
             'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS geo_consent_date TIMESTAMP'
+        ))
+        await conn.execute(text(
+            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS privacy_notice_accepted BOOLEAN'
+        ))
+        await conn.execute(text(
+            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS privacy_notice_date TIMESTAMP'
         ))
         # Workers already using the app are assumed to have implicitly consented
         await conn.execute(text(

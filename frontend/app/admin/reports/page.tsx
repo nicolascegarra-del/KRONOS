@@ -66,6 +66,19 @@ export default function ReportsPage() {
     }
   };
 
+  const exportITSS = async () => {
+    const res = await api.get("/reports/fichajes-export", {
+      params: { from_date: fromDate, to_date: toDate },
+      responseType: "blob",
+    });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `registros_jornada_${fromDate}_${toDate}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const exportCSV = () => {
     if (!report) return;
     const headers = ["Nombre", "Email", "Fichajes", "Horas trabajadas", "Minutos tarde", "Pausas"];
@@ -119,9 +132,18 @@ export default function ReportsPage() {
           {report && (
             <Button variant="outline" onClick={exportCSV} className="flex items-center gap-2">
               <Download className="w-4 h-4" />
-              Exportar CSV
+              Exportar resumen
             </Button>
           )}
+          <Button
+            variant="outline"
+            onClick={exportITSS}
+            disabled={!fromDate || !toDate}
+            className="flex items-center gap-2 border-amber-400 text-amber-700 hover:bg-amber-50"
+          >
+            <Download className="w-4 h-4" />
+            Exportar registros ITSS
+          </Button>
         </div>
       </div>
 

@@ -33,6 +33,8 @@ class User(SQLModel, table=True):
     dni: Optional[str] = Field(default=None)
     geo_consent: Optional[bool] = Field(default=None)
     geo_consent_date: Optional[datetime] = Field(default=None)
+    privacy_notice_accepted: Optional[bool] = Field(default=None)
+    privacy_notice_date: Optional[datetime] = Field(default=None)
 
     fichajes: List["Fichaje"] = Relationship(back_populates="user")
     company: Optional["Company"] = Relationship(back_populates="users")

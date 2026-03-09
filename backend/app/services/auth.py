@@ -27,9 +27,22 @@ def _create_token(data: dict, expires_delta: timedelta) -> str:
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def create_access_token(user_id: UUID, role: str, full_name: str = "", geo_consent: Optional[bool] = None) -> str:
+def create_access_token(
+    user_id: UUID,
+    role: str,
+    full_name: str = "",
+    geo_consent: Optional[bool] = None,
+    privacy_notice_accepted: Optional[bool] = None,
+) -> str:
     return _create_token(
-        {"sub": str(user_id), "role": role, "full_name": full_name, "geo_consent": geo_consent, "type": "access"},
+        {
+            "sub": str(user_id),
+            "role": role,
+            "full_name": full_name,
+            "geo_consent": geo_consent,
+            "privacy_notice_accepted": privacy_notice_accepted,
+            "type": "access",
+        },
         timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
 

@@ -54,6 +54,7 @@ interface ShiftButtonProps {
 
 export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
   const { user, setUser } = useAuthStore();
+  const [modalidad, setModalidad] = useState<"presencial" | "teletrabajo">("presencial");
   const [status, setStatus] = useState<ShiftStatus>("idle");
   const [loading, setLoading] = useState(false);
   const [fichaje, setFichaje] = useState<Fichaje | null>(null);
@@ -134,7 +135,7 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
     setError(null);
     try {
       const coords = geoConsent === false ? null : await getCurrentCoords();
-      const res = await api.post<Fichaje>("/fichajes/start", { coords });
+      const res = await api.post<Fichaje>("/fichajes/start", { coords, modalidad });
       setFichaje(res.data);
       setStatus("active");
       onStatusChange?.("active");
@@ -206,6 +207,34 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
         <p className="text-sm text-destructive bg-destructive/10 px-4 py-2 rounded-md">
           {error}
         </p>
+      )}
+
+      {/* Modalidad toggle — only visible before starting */}
+      {status === "idle" && (
+        <div className="flex rounded-full overflow-hidden border border-slate-300 text-sm font-medium">
+          <button
+            onClick={() => setModalidad("presencial")}
+            className={cn(
+              "px-5 py-1.5 transition-colors",
+              modalidad === "presencial"
+                ? "bg-slate-800 text-white"
+                : "text-slate-500 hover:bg-slate-100"
+            )}
+          >
+            Presencial
+          </button>
+          <button
+            onClick={() => setModalidad("teletrabajo")}
+            className={cn(
+              "px-5 py-1.5 transition-colors",
+              modalidad === "teletrabajo"
+                ? "bg-slate-800 text-white"
+                : "text-slate-500 hover:bg-slate-100"
+            )}
+          >
+            Teletrabajo
+          </button>
+        </div>
       )}
 
       {/* Main action button */}

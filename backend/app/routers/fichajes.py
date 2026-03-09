@@ -79,6 +79,7 @@ async def start_fichaje(
         late_minutes=0,
         start_lat=body.coords.lat if body.coords else None,
         start_lng=body.coords.lng if body.coords else None,
+        modalidad=body.modalidad or "presencial",
     )
     session.add(fichaje)
     await session.flush()
@@ -422,6 +423,8 @@ async def admin_edit_fichaje(
         fichaje.late_minutes = body.late_minutes
     if body.out_of_range is not None:
         fichaje.out_of_range = body.out_of_range
+    if body.modalidad is not None:
+        fichaje.modalidad = body.modalidad
 
     # If total_minutes explicitly provided, use it; otherwise auto-recalculate
     # when start/end changed on a finished shift.

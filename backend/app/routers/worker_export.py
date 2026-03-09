@@ -1,9 +1,9 @@
 import csv
 import io
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_session
 from app.dependencies import get_current_user
 from app.models.fichaje import Fichaje
-from app.models.pausa import Pausa
 from app.models.user import User
 
 router = APIRouter(prefix="/workers", tags=["workers"])
@@ -21,16 +20,24 @@ router = APIRouter(prefix="/workers", tags=["workers"])
 
 @router.get("/me/export")
 async def export_my_data(
+    from_date: Optional[date] = Query(default=None),
+    to_date: Optional[date] = Query(default=None),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """RGPD Art. 20 — Portability: download all fichajes as CSV."""
-    result = await session.execute(
+    """RGPD Art. 20 — Portability: download fichajes as CSV, optionally filtered by date."""
+    query = (
         select(Fichaje)
         .options(selectinload(Fichaje.pausas))
         .where(Fichaje.user_id == current_user.id)
         .order_by(Fichaje.start_time.desc())
     )
+    if from_date:
+        query = query.where(Fichaje.start_time >= datetime.combine(from_date, datetime.min.time()))
+    if to_date:
+        query = query.where(Fichaje.start_time <= datetime.combine(to_date, datetime.max.time()))
+
+    result = await session.execute(query)
     fichajes = result.scalars().all()
 
     output = io.StringIO()
@@ -62,12 +69,28 @@ async def export_my_data(
         ])
 
     csv_bytes = output.getvalue().encode("utf-8-sig")  # BOM for Excel compatibility
-    month = datetime.utcnow().strftime("%Y-%m")
+    # Use date range in filename if filters applied, otherwise current month
+    if from_date or to_date:
+        label = f"{from_date or 'inicio'}_{to_date or 'hoy'}"
+    else:
+        label = datetime.utcnow().strftime("%Y-%m")
     return StreamingResponse(
         io.BytesIO(csv_bytes),
         media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="fichajes_{month}.csv"'},
+        headers={"Content-Disposition": f'attachment; filename="fichajes_{label}.csv"'},
     )
+
+
+@router.post("/me/privacy-notice", status_code=status.HTTP_204_NO_CONTENT)
+async def accept_privacy_notice(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """RGPD Art. 13 — Record that the worker has read the privacy information notice."""
+    current_user.privacy_notice_accepted = True
+    current_user.privacy_notice_date = datetime.utcnow()
+    session.add(current_user)
+    await session.commit()
 
 
 class GeoConsentBody(BaseModel):

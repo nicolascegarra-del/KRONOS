@@ -30,6 +30,10 @@ class Fichaje(SQLModel, table=True):
     end_lat: Optional[float] = None
     end_lng: Optional[float] = None
     out_of_range: Optional[bool] = None  # None = no check, True = outside work center
+    modalidad: Optional[str] = Field(default=None)  # "presencial" | "teletrabajo"
+    edit_comment: Optional[str] = None
+    last_edited_by_id: Optional[UUID] = None
+    last_edited_at: Optional[datetime] = None
 
     user: Optional["User"] = Relationship(back_populates="fichajes")
     pausas: List["Pausa"] = Relationship(back_populates="fichaje")

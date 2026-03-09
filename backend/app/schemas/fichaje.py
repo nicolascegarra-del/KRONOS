@@ -40,6 +40,7 @@ class PauseRequest(BaseModel):
 
 class StartRequest(BaseModel):
     coords: Optional[GeoCoords] = None
+    modalidad: Optional[str] = None  # "presencial" | "teletrabajo"
 
 
 class EndRequest(BaseModel):
@@ -63,6 +64,8 @@ class FichajeRead(BaseModel):
     end_lat: Optional[float] = None
     end_lng: Optional[float] = None
     out_of_range: Optional[bool] = None
+    modalidad: Optional[str] = None
+    edit_comment: Optional[str] = None
     pausas: List[PausaRead] = []
 
     model_config = {"from_attributes": True}
@@ -79,3 +82,5 @@ class FichajeAdminUpdate(BaseModel):
     total_minutes: Optional[int] = None
     late_minutes: Optional[int] = None
     out_of_range: Optional[bool] = None
+    modalidad: Optional[str] = None
+    edit_comment: str = Field(min_length=3)

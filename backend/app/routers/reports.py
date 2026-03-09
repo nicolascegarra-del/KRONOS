@@ -1,8 +1,11 @@
 import asyncio
+import csv
+import io
 from datetime import date, datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -86,6 +89,88 @@ async def hours_report(
         from_date=from_date,
         to_date=to_date,
         workers=list(workers_map.values()),
+    )
+
+
+@router.get("/fichajes-export")
+async def fichajes_raw_export(
+    from_date: date = Query(..., description="Fecha inicio (inclusive)"),
+    to_date: date = Query(..., description="Fecha fin (inclusive)"),
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(require_admin),
+):
+    """Export all raw fichajes for the company as CSV (for ITSS inspection)."""
+    from_dt = datetime.combine(from_date, datetime.min.time())
+    to_dt = datetime.combine(to_date, datetime.max.time())
+
+    result = await session.execute(
+        select(Fichaje)
+        .join(User, Fichaje.user_id == User.id)
+        .options(selectinload(Fichaje.pausas), selectinload(Fichaje.user))
+        .where(
+            Fichaje.start_time >= from_dt,
+            Fichaje.start_time <= to_dt,
+            User.company_id == admin.company_id,
+        )
+        .order_by(User.full_name, Fichaje.start_time)
+    )
+    fichajes = result.scalars().all()
+
+    # Load editors (last_edited_by_id) in bulk
+    editor_ids = {f.last_edited_by_id for f in fichajes if f.last_edited_by_id}
+    editors: dict[UUID, str] = {}
+    if editor_ids:
+        ed_result = await session.execute(
+            select(User).where(User.id.in_(editor_ids))
+        )
+        editors = {u.id: u.full_name for u in ed_result.scalars().all()}
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "trabajador", "dni", "email",
+        "fecha", "inicio", "fin", "duracion_minutos", "minutos_tarde",
+        "estado", "modalidad", "pausas",
+        "motivo_edicion", "editado_por", "editado_fecha",
+    ])
+
+    for f in fichajes:
+        u = f.user
+        fecha = f.start_time.date().isoformat() if f.start_time else ""
+        inicio = f.start_time.strftime("%H:%M:%S") if f.start_time else ""
+        fin = f.end_time.strftime("%H:%M:%S") if f.end_time else ""
+
+        pausa_parts = []
+        for p in sorted(f.pausas, key=lambda x: x.start_time):
+            p_start = p.start_time.strftime("%H:%M") if p.start_time else "?"
+            p_end = p.end_time.strftime("%H:%M") if p.end_time else "?"
+            label = p.comment or "Pausa"
+            pausa_parts.append(f"{label} {p_start}-{p_end}")
+
+        editor_name = editors.get(f.last_edited_by_id, "") if f.last_edited_by_id else ""
+        edited_at = f.last_edited_at.strftime("%Y-%m-%d %H:%M") if f.last_edited_at else ""
+
+        writer.writerow([
+            u.full_name if u else "",
+            u.dni or "" if u else "",
+            u.email if u else "",
+            fecha, inicio, fin,
+            f.total_minutes or "",
+            f.late_minutes or 0,
+            f.status.value if f.status else "",
+            getattr(f, "modalidad", "") or "",
+            "; ".join(pausa_parts),
+            f.edit_comment or "",
+            editor_name,
+            edited_at,
+        ])
+
+    csv_bytes = output.getvalue().encode("utf-8-sig")
+    filename = f"registros_jornada_{from_date}_{to_date}.csv"
+    return StreamingResponse(
+        io.BytesIO(csv_bytes),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
