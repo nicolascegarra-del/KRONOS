@@ -3,8 +3,9 @@
 import React, { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { FichajeCard } from "@/components/FichajeCard";
-import { Clock, Download } from "lucide-react";
+import { Download } from "lucide-react";
 import { downloadBlob } from "@/lib/downloadBlob";
+import { useToast } from "@/components/ui/use-toast";
 
 interface Pausa {
   id: string;
@@ -31,6 +32,7 @@ export default function HistoryPage() {
   const [downloading, setDownloading] = useState(false);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const { toast } = useToast();
 
   useEffect(() => {
     api
@@ -51,8 +53,9 @@ export default function HistoryPage() {
         ? `${fromDate || "inicio"}_${toDate || "hoy"}`
         : new Date().toISOString().slice(0, 7);
       downloadBlob(res.data, `fichajes_${label}.csv`, "text/csv");
+      toast({ title: "Descarga completada", description: `fichajes_${label}.csv`, variant: "success" });
     } catch {
-      // silently ignore
+      toast({ title: "Error al descargar", description: "Inténtalo de nuevo", variant: "destructive" });
     } finally {
       setDownloading(false);
     }
@@ -105,9 +108,17 @@ export default function HistoryPage() {
       </div>
 
       {loading && (
-        <div className="flex items-center justify-center py-12 text-muted-foreground">
-          <Clock className="w-5 h-5 animate-spin mr-2" />
-          Cargando...
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white rounded-xl border p-4 space-y-3">
+              <div className="flex justify-between">
+                <div className="h-4 w-32 animate-pulse bg-slate-200 rounded" />
+                <div className="h-5 w-16 animate-pulse bg-slate-200 rounded-full" />
+              </div>
+              <div className="h-3 w-24 animate-pulse bg-slate-200 rounded" />
+              <div className="h-3 w-20 animate-pulse bg-slate-200 rounded" />
+            </div>
+          ))}
         </div>
       )}
 

@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
-import { LayoutDashboard, Building2, Users, LogOut, Menu, X, CreditCard, FileText, Clock, Shield } from "lucide-react";
+import { LayoutDashboard, Building2, Users, LogOut, X, CreditCard, FileText, Clock, Shield, MoreHorizontal, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -17,6 +17,9 @@ const navItems = [
   { href: "/superadmin/access-logs", label: "Log de accesos", icon: Shield },
 ];
 
+const bottomNavItems = navItems.slice(0, 4);
+const moreNavItems = navItems.slice(4);
+
 export default function SuperAdminLayout({
   children,
 }: {
@@ -26,6 +29,9 @@ export default function SuperAdminLayout({
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  const isMoreActive = moreNavItems.some((item) => pathname === item.href);
 
   const handleLogout = async () => {
     await logout();
@@ -34,7 +40,7 @@ export default function SuperAdminLayout({
 
   return (
     <div className="min-h-screen flex bg-slate-50">
-      {/* Sidebar */}
+      {/* ── Sidebar ── */}
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white flex flex-col transition-transform duration-200",
@@ -44,7 +50,7 @@ export default function SuperAdminLayout({
       >
         <div className="flex items-center justify-between px-4 py-5 border-b border-slate-700">
           <img src="/logo_kronos.png" alt="Kronos" className="h-12 w-auto max-w-[180px]" />
-          <button className="md:hidden" onClick={() => setSidebarOpen(false)}>
+          <button className="md:hidden" onClick={() => setSidebarOpen(false)} aria-label="Cerrar menú">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -62,22 +68,11 @@ export default function SuperAdminLayout({
                   : "text-slate-400 hover:bg-slate-800 hover:text-white"
               )}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className="w-4 h-4" aria-hidden="true" />
               {label}
             </Link>
           ))}
         </nav>
-
-        <div className="p-4 border-t border-slate-700">
-          <p className="text-xs text-slate-400 mb-1">{user?.email}</p>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            Cerrar sesión
-          </button>
-        </div>
       </aside>
 
       {/* Mobile overlay */}
@@ -88,19 +83,97 @@ export default function SuperAdminLayout({
         />
       )}
 
-      {/* Main content */}
+      {/* ── Main content ── */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="bg-slate-900 text-white px-4 py-3 flex items-center gap-3">
-          <button className="md:hidden" onClick={() => setSidebarOpen(true)}>
-            <Menu className="w-5 h-5" />
+          <button
+            className="md:hidden p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Abrir menú"
+          >
+            <Menu className="w-5 h-5" aria-hidden="true" />
           </button>
-          <img src="/logo_kronos.png" alt="Kronos" className="h-10 w-auto" />
+          <img src="/logo_kronos.png" alt="Kronos" className="h-10 w-auto md:hidden" />
+          <div className="flex-1" />
+          <button
+            onClick={handleLogout}
+            title={user?.email}
+            aria-label="Cerrar sesión"
+            className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+          >
+            <LogOut className="w-5 h-5" aria-hidden="true" />
+          </button>
         </header>
 
-        <main className="flex-1 p-4 md:p-8 overflow-auto">
+        <main className="flex-1 p-4 md:p-8 overflow-auto pb-24 md:pb-8">
           {children}
         </main>
       </div>
+
+      {/* ── Bottom nav (mobile only) ── */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t md:hidden z-30">
+        <div className="flex">
+          {bottomNavItems.map(({ href, label, icon: Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                "flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-xs font-medium transition-colors",
+                pathname === href ? "text-primary" : "text-muted-foreground"
+              )}
+            >
+              <Icon className="w-5 h-5" aria-hidden="true" />
+              <span>{label}</span>
+            </Link>
+          ))}
+          <button
+            onClick={() => setMoreOpen(true)}
+            className={cn(
+              "flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-xs font-medium transition-colors",
+              isMoreActive ? "text-primary" : "text-muted-foreground"
+            )}
+          >
+            <MoreHorizontal className="w-5 h-5" aria-hidden="true" />
+            <span>Más</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* ── "Más" slide-up panel (mobile) ── */}
+      {moreOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/40 md:hidden"
+            onClick={() => setMoreOpen(false)}
+          />
+          <div className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-xl md:hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <span className="font-semibold text-slate-800">Más opciones</span>
+              <button onClick={() => setMoreOpen(false)} aria-label="Cerrar panel">
+                <X className="w-5 h-5 text-slate-500" aria-hidden="true" />
+              </button>
+            </div>
+            <nav className="p-4 space-y-1 pb-8">
+              {moreNavItems.map(({ href, label, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={() => setMoreOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-3 rounded-md text-sm font-medium transition-colors",
+                    pathname === href
+                      ? "bg-slate-100 text-slate-900"
+                      : "text-slate-600 hover:bg-slate-50"
+                  )}
+                >
+                  <Icon className="w-5 h-5" aria-hidden="true" />
+                  {label}
+                </Link>
+              ))}
+            </nav>
+          </div>
+        </>
+      )}
     </div>
   );
 }

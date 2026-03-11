@@ -308,9 +308,9 @@ export default function AdminFichajesPage() {
 
       {/* Table */}
       <div className="bg-white rounded-lg border overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b">
+            <thead className="bg-slate-50 border-b sticky top-0 z-10">
               <tr>
                 <th className="text-left p-3 font-medium">Trabajador</th>
                 <th className="text-left p-3 font-medium">Inicio</th>
@@ -324,10 +324,24 @@ export default function AdminFichajesPage() {
               </tr>
             </thead>
             <tbody>
-              {fichajes.length === 0 ? (
+              {loading ? (
+                Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i} className="border-b">
+                    <td className="p-3"><div className="h-4 w-28 animate-pulse bg-slate-200 rounded" /><div className="h-3 w-32 animate-pulse bg-slate-200 rounded mt-1" /></td>
+                    <td className="p-3"><div className="h-4 w-28 animate-pulse bg-slate-200 rounded" /></td>
+                    <td className="p-3"><div className="h-4 w-28 animate-pulse bg-slate-200 rounded" /></td>
+                    <td className="p-3 text-right"><div className="h-4 w-12 animate-pulse bg-slate-200 rounded ml-auto" /></td>
+                    <td className="p-3 text-center"><div className="h-5 w-16 animate-pulse bg-slate-200 rounded-full mx-auto" /></td>
+                    <td className="p-3 text-center"><div className="h-5 w-20 animate-pulse bg-slate-200 rounded-full mx-auto" /></td>
+                    <td className="p-3 text-right"><div className="h-4 w-4 animate-pulse bg-slate-200 rounded ml-auto" /></td>
+                    <td className="p-3"><div className="h-4 w-24 animate-pulse bg-slate-200 rounded" /></td>
+                    <td className="p-3"><div className="h-7 w-16 animate-pulse bg-slate-200 rounded mx-auto" /></td>
+                  </tr>
+                ))
+              ) : fichajes.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="p-6 text-center text-muted-foreground">
-                    {loading ? "Cargando..." : "Sin fichajes para los filtros seleccionados"}
+                    Sin fichajes para los filtros seleccionados
                   </td>
                 </tr>
               ) : (
@@ -428,83 +442,106 @@ export default function AdminFichajesPage() {
 
       {/* Edit dialog */}
       <Dialog open={editTarget != null} onOpenChange={(open) => !open && setEditTarget(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Editar Fichaje</DialogTitle>
+            <DialogTitle>
+              Editar Fichaje
+              {editTarget?.user && (
+                <span className="text-sm font-normal text-muted-foreground ml-2">
+                  — {editTarget.user.full_name}
+                </span>
+              )}
+            </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="space-y-1">
-              <Label>Inicio</Label>
-              <Input
-                type="datetime-local"
-                value={editForm.start_time}
-                onChange={(e) => setEditForm((p) => ({ ...p, start_time: e.target.value }))}
-              />
+          <div className="space-y-5">
+            {/* Tiempos */}
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide border-b pb-1 mb-3">Tiempos</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Inicio</Label>
+                  <Input
+                    type="datetime-local"
+                    value={editForm.start_time}
+                    onChange={(e) => setEditForm((p) => ({ ...p, start_time: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Fin <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+                  <Input
+                    type="datetime-local"
+                    value={editForm.end_time}
+                    onChange={(e) => setEditForm((p) => ({ ...p, end_time: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Estado</Label>
+                  <select
+                    value={editForm.status}
+                    onChange={(e) => setEditForm((p) => ({ ...p, status: e.target.value }))}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                  >
+                    <option value="active">Activo</option>
+                    <option value="paused">Pausado</option>
+                    <option value="finished">Finalizado</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Modalidad</Label>
+                  <select
+                    value={editForm.modalidad}
+                    onChange={(e) => setEditForm((p) => ({ ...p, modalidad: e.target.value }))}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                  >
+                    <option value="presencial">Presencial</option>
+                    <option value="teletrabajo">Teletrabajo</option>
+                  </select>
+                </div>
+              </div>
             </div>
-            <div className="space-y-1">
-              <Label>Fin (opcional)</Label>
-              <Input
-                type="datetime-local"
-                value={editForm.end_time}
-                onChange={(e) => setEditForm((p) => ({ ...p, end_time: e.target.value }))}
-              />
+
+            {/* Cálculos */}
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide border-b pb-1 mb-3">Cálculos <span className="text-slate-400 normal-case font-normal">(opcionales)</span></p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Min. trabajados</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    placeholder="Auto-calculado"
+                    value={editForm.total_minutes}
+                    onChange={(e) => setEditForm((p) => ({ ...p, total_minutes: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Min. tarde</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={editForm.late_minutes}
+                    onChange={(e) => setEditForm((p) => ({ ...p, late_minutes: e.target.value }))}
+                  />
+                </div>
+              </div>
             </div>
-            <div className="space-y-1">
-              <Label>Estado</Label>
-              <select
-                value={editForm.status}
-                onChange={(e) => setEditForm((p) => ({ ...p, status: e.target.value }))}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-              >
-                <option value="active">Activo</option>
-                <option value="paused">Pausado</option>
-                <option value="finished">Finalizado</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label>Modalidad</Label>
-              <select
-                value={editForm.modalidad}
-                onChange={(e) => setEditForm((p) => ({ ...p, modalidad: e.target.value }))}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-              >
-                <option value="presencial">Presencial</option>
-                <option value="teletrabajo">Teletrabajo</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label>Minutos trabajados (opcional)</Label>
-              <Input
-                type="number"
-                min={0}
-                placeholder="Auto-calculado si no se indica"
-                value={editForm.total_minutes}
-                onChange={(e) => setEditForm((p) => ({ ...p, total_minutes: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Minutos tarde (opcional)</Label>
-              <Input
-                type="number"
-                min={0}
-                value={editForm.late_minutes}
-                onChange={(e) => setEditForm((p) => ({ ...p, late_minutes: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1">
+
+            {/* Auditoría */}
+            <div className="bg-amber-50 rounded-lg p-3 space-y-1">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide pb-1">Auditoría</p>
               <Label>
                 Motivo del cambio <span className="text-destructive">*</span>
               </Label>
               <Textarea
-                placeholder="Describe el motivo de la edición (obligatorio)"
+                placeholder="Describe el motivo de la edición (obligatorio, mín. 3 caracteres)"
                 rows={3}
                 value={editForm.edit_comment}
                 onChange={(e) => setEditForm((p) => ({ ...p, edit_comment: e.target.value }))}
               />
             </div>
 
-            {saveError && <p className="text-sm text-destructive">{saveError}</p>}
+            {saveError && <p className="text-sm text-destructive" role="alert">{saveError}</p>}
 
             <div className="flex gap-3 justify-end pt-2">
               <Button variant="outline" onClick={() => setEditTarget(null)} disabled={saving}>

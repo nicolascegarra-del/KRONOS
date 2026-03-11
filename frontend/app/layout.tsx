@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
   title: "KRONOS",
@@ -35,6 +36,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-background antialiased">
         {children}
+        <Toaster />
       </body>
     </html>
   );

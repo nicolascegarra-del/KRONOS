@@ -7,6 +7,7 @@ import { getCurrentCoords } from "@/lib/geo";
 import { useAuthStore } from "@/store/auth";
 import { PauseDialog } from "./PauseDialog";
 import { Play, Square, Coffee, RotateCcw } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 
 type ShiftStatus = "idle" | "active" | "paused";
 
@@ -69,6 +70,7 @@ interface ShiftButtonProps {
 
 export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
   const { user, setUser } = useAuthStore();
+  const { toast } = useToast();
   const [modalidad, setModalidad] = useState<"presencial" | "teletrabajo">("presencial");
   const [status, setStatus] = useState<ShiftStatus>("idle");
   const [loading, setLoading] = useState(false);
@@ -154,6 +156,7 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
       setFichaje(res.data);
       setStatus("active");
       onStatusChange?.("active");
+      toast({ title: "Jornada iniciada", variant: "success" });
     } catch (e: any) {
       setError(e.response?.data?.detail || "Error al iniciar jornada");
     } finally {
@@ -179,6 +182,7 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
       setStatus("idle");
       setElapsed("00:00:00");
       onStatusChange?.("idle");
+      toast({ title: "Jornada finalizada", variant: "success" });
     } catch (e: any) {
       setError(e.response?.data?.detail || "Error al finalizar jornada");
     } finally {
@@ -195,6 +199,7 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
       setFichaje(res.data);
       setStatus("active");
       onStatusChange?.("active");
+      toast({ title: "Jornada reanudada", variant: "success" });
     } catch (e: any) {
       setError(e.response?.data?.detail || "Error al reanudar");
     } finally {
@@ -220,14 +225,14 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
 
       {/* Break reminder — Art. 34.4 ET: mandatory 15 min break after 6h */}
       {fichaje && needsBreakReminder(fichaje) && (
-        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-800 text-sm max-w-xs text-center">
-          <Coffee className="w-4 h-4 shrink-0" />
+        <div role="alert" aria-live="polite" className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-800 text-sm max-w-xs text-center">
+          <Coffee className="w-4 h-4 shrink-0" aria-hidden="true" />
           <span>Llevas más de 6h trabajando. Recuerda tomar un descanso de al menos 15 minutos.</span>
         </div>
       )}
 
       {error && (
-        <p className="text-sm text-destructive bg-destructive/10 px-4 py-2 rounded-md">
+        <p role="alert" aria-live="polite" className="text-sm text-destructive bg-destructive/10 px-4 py-2 rounded-md">
           {error}
         </p>
       )}
@@ -237,6 +242,7 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
         <div className="flex rounded-full overflow-hidden border border-slate-300 text-sm font-medium">
           <button
             onClick={() => setModalidad("presencial")}
+            aria-pressed={modalidad === "presencial"}
             className={cn(
               "px-5 py-1.5 transition-colors",
               modalidad === "presencial"
@@ -248,6 +254,7 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
           </button>
           <button
             onClick={() => setModalidad("teletrabajo")}
+            aria-pressed={modalidad === "teletrabajo"}
             className={cn(
               "px-5 py-1.5 transition-colors",
               modalidad === "teletrabajo"
@@ -266,6 +273,7 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
           onClick={handleStart}
           disabled={loading}
           data-testid="btn-start"
+          aria-label="Iniciar jornada laboral"
           className={cn(
             "w-64 h-64 rounded-full text-white text-2xl font-bold shadow-2xl transition-all duration-200",
             "bg-green-500 hover:bg-green-600 active:scale-95",
@@ -273,7 +281,7 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
             "flex flex-col items-center justify-center gap-3"
           )}
         >
-          <Play className="w-12 h-12" />
+          <Play className="w-12 h-12" aria-hidden="true" />
           <span>Iniciar Jornada</span>
         </button>
       )}
@@ -284,6 +292,7 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
             onClick={handleEnd}
             disabled={loading}
             data-testid="btn-end"
+            aria-label="Finalizar jornada laboral"
             className={cn(
               "w-64 h-64 rounded-full text-white text-2xl font-bold shadow-2xl transition-all duration-200",
               "bg-red-500 hover:bg-red-600 active:scale-95",
@@ -291,7 +300,7 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
               "flex flex-col items-center justify-center gap-3"
             )}
           >
-            <Square className="w-12 h-12" />
+            <Square className="w-12 h-12" aria-hidden="true" />
             <span>Finalizar Jornada</span>
           </button>
 
@@ -299,6 +308,7 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
             onClick={() => setPauseOpen(true)}
             disabled={loading}
             data-testid="btn-pause"
+            aria-label="Iniciar pausa"
             className={cn(
               "px-8 py-3 rounded-full text-white font-semibold text-lg shadow-md transition-all duration-200",
               "bg-amber-500 hover:bg-amber-600 active:scale-95",
@@ -306,7 +316,7 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
               "flex items-center gap-2"
             )}
           >
-            <Coffee className="w-5 h-5" />
+            <Coffee className="w-5 h-5" aria-hidden="true" />
             Pausa
           </button>
         </div>
@@ -321,6 +331,7 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
             onClick={handleResume}
             disabled={loading}
             data-testid="btn-resume"
+            aria-label="Reanudar jornada"
             className={cn(
               "w-64 h-64 rounded-full text-white text-2xl font-bold shadow-2xl transition-all duration-200",
               "bg-blue-500 hover:bg-blue-600 active:scale-95",
@@ -328,7 +339,7 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
               "flex flex-col items-center justify-center gap-3"
             )}
           >
-            <RotateCcw className="w-12 h-12" />
+            <RotateCcw className="w-12 h-12" aria-hidden="true" />
             <span>Reanudar</span>
           </button>
         </div>

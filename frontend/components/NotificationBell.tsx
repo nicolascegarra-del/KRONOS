@@ -93,7 +93,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-white border rounded-lg shadow-lg z-50 overflow-hidden">
+        <div className="absolute right-0 top-full mt-2 w-72 max-w-[calc(100vw-2rem)] bg-white border rounded-lg shadow-lg z-50 overflow-hidden">
           <div className="px-4 py-2 border-b bg-slate-50">
             <p className="text-sm font-semibold text-slate-700">Alertas de puntualidad</p>
           </div>

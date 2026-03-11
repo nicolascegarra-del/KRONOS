@@ -139,9 +139,9 @@ export default function UsersPage() {
       </div>
 
       <div className="bg-white rounded-lg border overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b">
+            <thead className="bg-slate-50 border-b sticky top-0 z-10">
               <tr>
                 <th className="text-left p-3 font-medium">Nombre</th>
                 <th className="text-left p-3 font-medium">Email</th>
@@ -154,11 +154,17 @@ export default function UsersPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={6} className="p-6 text-center text-muted-foreground">
-                    Cargando...
-                  </td>
-                </tr>
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b">
+                    <td className="p-3"><div className="h-4 w-28 animate-pulse bg-slate-200 rounded" /></td>
+                    <td className="p-3"><div className="h-4 w-36 animate-pulse bg-slate-200 rounded" /></td>
+                    <td className="p-3"><div className="h-4 w-20 animate-pulse bg-slate-200 rounded" /></td>
+                    <td className="p-3"><div className="h-5 w-14 animate-pulse bg-slate-200 rounded-full" /></td>
+                    <td className="p-3"><div className="h-4 w-20 animate-pulse bg-slate-200 rounded" /></td>
+                    <td className="p-3"><div className="h-5 w-14 animate-pulse bg-slate-200 rounded-full" /></td>
+                    <td className="p-3 text-right"><div className="h-8 w-16 animate-pulse bg-slate-200 rounded ml-auto" /></td>
+                  </tr>
+                ))
               ) : (
                 users.map((u) => (
                   <tr key={u.id} className="border-b last:border-0 hover:bg-slate-50">
@@ -182,14 +188,14 @@ export default function UsersPage() {
                     </td>
                     <td className="p-3 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <Button size="icon" variant="ghost" onClick={() => openEdit(u)}>
-                          <Pencil className="w-4 h-4" />
+                        <Button size="icon" variant="ghost" onClick={() => openEdit(u)} aria-label="Editar trabajador">
+                          <Pencil className="w-4 h-4" aria-hidden="true" />
                         </Button>
-                        <Button size="icon" variant="ghost" onClick={() => toggleActive(u)}>
+                        <Button size="icon" variant="ghost" onClick={() => toggleActive(u)} aria-label={u.is_active ? "Desactivar trabajador" : "Activar trabajador"}>
                           {u.is_active ? (
-                            <UserX className="w-4 h-4 text-destructive" />
+                            <UserX className="w-4 h-4 text-destructive" aria-hidden="true" />
                           ) : (
-                            <UserCheck className="w-4 h-4 text-green-600" />
+                            <UserCheck className="w-4 h-4 text-green-600" aria-hidden="true" />
                           )}
                         </Button>
                       </div>

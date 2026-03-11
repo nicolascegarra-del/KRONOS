@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Send, Save, Bell, Clock, XCircle } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 
 interface AppSettings {
   late_alert_enabled: boolean;
@@ -35,6 +36,7 @@ const EMPTY: EmailConfig = {
 };
 
 export default function SettingsPage() {
+  const { toast } = useToast();
   const [form, setForm] = useState<EmailConfig>(EMPTY);
   const [password, setPassword] = useState("");
   const [testTo, setTestTo] = useState("");
@@ -71,6 +73,33 @@ export default function SettingsPage() {
     }).finally(() => setLoading(false));
   }, []);
 
+  // Auto-dismiss messages after 3s
+  useEffect(() => {
+    if (!saveMsg) return;
+    const t = setTimeout(() => setSaveMsg(null), 3000);
+    return () => clearTimeout(t);
+  }, [saveMsg]);
+  useEffect(() => {
+    if (!testMsg) return;
+    const t = setTimeout(() => setTestMsg(null), 3000);
+    return () => clearTimeout(t);
+  }, [testMsg]);
+  useEffect(() => {
+    if (!notifMsg) return;
+    const t = setTimeout(() => setNotifMsg(null), 3000);
+    return () => clearTimeout(t);
+  }, [notifMsg]);
+  useEffect(() => {
+    if (!autoCloseMsg) return;
+    const t = setTimeout(() => setAutoCloseMsg(null), 3000);
+    return () => clearTimeout(t);
+  }, [autoCloseMsg]);
+  useEffect(() => {
+    if (!closeAllMsg) return;
+    const t = setTimeout(() => setCloseAllMsg(null), 3000);
+    return () => clearTimeout(t);
+  }, [closeAllMsg]);
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -89,6 +118,7 @@ export default function SettingsPage() {
       setForm(res.data);
       setPassword("");
       setSaveMsg({ ok: true, text: "Configuración guardada correctamente." });
+      toast({ title: "Configuración guardada", variant: "success" });
     } catch (e: any) {
       setSaveMsg({ ok: false, text: e.response?.data?.detail || "Error al guardar" });
     } finally {
