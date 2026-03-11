@@ -70,7 +70,7 @@ export default function WorkerLayout({
             <button
               onClick={handleAcceptNotice}
               disabled={acceptingNotice}
-              className="w-full py-2.5 rounded-lg bg-blue-600 text-white font-medium text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
               {acceptingNotice ? "Guardando..." : "He leído y entendido esta información"}
             </button>
