@@ -70,8 +70,7 @@ async def run_migrations() -> None:
         # PostgreSQL stores Python enums as native ENUM types.
         # ALTER TYPE ... ADD VALUE cannot run inside a transaction,
         # so we use AUTOCOMMIT isolation level.
-        async with engine.connect() as conn:
-            await conn.execution_options(isolation_level="AUTOCOMMIT")
+        async with engine.execution_options(isolation_level="AUTOCOMMIT").connect() as conn:
             await conn.execute(
                 text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'superadmin'")
             )
