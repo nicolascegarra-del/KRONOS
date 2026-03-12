@@ -18,6 +18,7 @@ from app.models.user import User, UserRole
 from app.models.work_center import WorkCenter
 from app.schemas.fichaje import (
     FichajeAdminRead, FichajeAdminUpdate, FichajeRead,
+    FichajeEditLogRead, FieldChange,
     PauseRequest, StartRequest, EndRequest, ResumeRequest,
 )
 from app.services.access_log import log_admin_access
@@ -408,6 +409,7 @@ async def admin_edit_fichaje(
         "total_minutes": fichaje.total_minutes,
         "late_minutes": fichaje.late_minutes,
         "out_of_range": fichaje.out_of_range,
+        "modalidad": fichaje.modalidad,
         "edit_comment": fichaje.edit_comment,
     }
     edit_log = FichajeEditLog(
@@ -446,6 +448,91 @@ async def admin_edit_fichaje(
     session.add(fichaje)
     await session.commit()
     return await _reload(session, fichaje.id)
+
+
+_DIFF_FIELDS = ["start_time", "end_time", "status", "modalidad", "total_minutes", "late_minutes"]
+
+
+def _snapshot_from_fichaje(f: "Fichaje") -> dict:
+    return {
+        "start_time": f.start_time.isoformat() if f.start_time else None,
+        "end_time": f.end_time.isoformat() if f.end_time else None,
+        "status": f.status.value if f.status else None,
+        "modalidad": f.modalidad,
+        "total_minutes": f.total_minutes,
+        "late_minutes": f.late_minutes,
+    }
+
+
+def _compute_diff(before: dict, after: dict) -> "dict[str, FieldChange]":
+    changes: dict = {}
+    for field in _DIFF_FIELDS:
+        b = str(before.get(field)) if before.get(field) is not None else None
+        a = str(after.get(field)) if after.get(field) is not None else None
+        if b != a:
+            changes[field] = FieldChange(before=b, after=a)
+    return changes
+
+
+@router.get("/admin/{fichaje_id}/history", response_model=list[FichajeEditLogRead])
+async def admin_fichaje_history(
+    fichaje_id: UUID,
+    admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    import json
+    from app.models.fichajeeditlog import FichajeEditLog
+
+    # Verify fichaje belongs to admin's company
+    result = await session.execute(
+        select(Fichaje)
+        .join(User, Fichaje.user_id == User.id)
+        .where(Fichaje.id == fichaje_id, User.company_id == admin.company_id)
+    )
+    fichaje = result.scalar_one_or_none()
+    if not fichaje:
+        raise HTTPException(status_code=404, detail="Fichaje not found")
+
+    # Fetch all logs ordered oldest first to compute diffs
+    logs_result = await session.execute(
+        select(FichajeEditLog)
+        .where(FichajeEditLog.fichaje_id == fichaje_id)
+        .order_by(FichajeEditLog.edited_at.asc())
+    )
+    logs = logs_result.scalars().all()
+
+    # Fetch editors
+    editor_ids = list({log.edited_by_id for log in logs})
+    editors: dict = {}
+    if editor_ids:
+        editors_result = await session.execute(
+            select(User).where(User.id.in_(editor_ids))
+        )
+        for u in editors_result.scalars().all():
+            editors[u.id] = u
+
+    # Build diff list: each log's "after" = next log's "before", or current fichaje for the latest
+    current_snapshot = _snapshot_from_fichaje(fichaje)
+    entries = []
+    for i, log in enumerate(logs):
+        before = json.loads(log.original_data)
+        # Determine "after" state: snapshot of next log's "before", or current fichaje
+        if i + 1 < len(logs):
+            after = json.loads(logs[i + 1].original_data)
+        else:
+            after = current_snapshot
+        editor = editors.get(log.edited_by_id)
+        entries.append(FichajeEditLogRead(
+            id=log.id,
+            edited_at=log.edited_at,
+            edited_by=editor,
+            comment=log.comment,
+            changes=_compute_diff(before, after),
+        ))
+
+    # Return newest first
+    entries.reverse()
+    return entries
 
 
 @router.get("/superadmin", response_model=list[FichajeAdminRead])

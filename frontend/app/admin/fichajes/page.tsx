@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, Pencil, CheckCircle2, MapPin, MessageSquare } from "lucide-react";
+import { Search, Pencil, CheckCircle2, MapPin, MessageSquare, History } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ModalidadBadge } from "@/components/ModalidadBadge";
 import { Textarea } from "@/components/ui/textarea";
@@ -52,7 +52,21 @@ interface FichajeAdmin {
   out_of_range?: boolean;
   rest_violation?: boolean;
   edit_comment?: string;
+  last_edited_at?: string;
   pausas: PausaAdmin[];
+}
+
+interface FieldChange {
+  before: string | null;
+  after: string | null;
+}
+
+interface EditLogEntry {
+  id: string;
+  edited_at: string;
+  edited_by: { id: string; full_name: string; email: string } | null;
+  comment: string;
+  changes: Record<string, FieldChange>;
 }
 
 interface GeoEvent {
@@ -164,6 +178,35 @@ function fmtDatetime(iso?: string): string {
   return format(new Date(iso), "dd/MM/yyyy HH:mm");
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  start_time: "Inicio",
+  end_time: "Fin",
+  status: "Estado",
+  modalidad: "Modalidad",
+  total_minutes: "Min. trabajados",
+  late_minutes: "Min. tarde",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  active: "Activo",
+  paused: "Pausado",
+  finished: "Finalizado",
+};
+
+function formatFieldValue(field: string, value: string | null): string {
+  if (value === null || value === "None" || value === "null") return "—";
+  if (field === "start_time" || field === "end_time") {
+    try {
+      const d = new Date(value.endsWith("Z") ? value : value + "Z");
+      return format(d, "dd/MM/yyyy HH:mm");
+    } catch { return value; }
+  }
+  if (field === "status") return STATUS_LABELS[value] ?? value;
+  if (field === "modalidad") return value === "teletrabajo" ? "Teletrabajo" : "Presencial";
+  if (field === "total_minutes" || field === "late_minutes") return `${value} min`;
+  return value;
+}
+
 function toInputDatetime(iso?: string): string {
   if (!iso) return "";
   return iso.slice(0, 16);
@@ -178,6 +221,9 @@ export default function AdminFichajesPage() {
   const [statusFilter, setStatusFilter] = useState("");
 
   const [geoTarget, setGeoTarget] = useState<FichajeAdmin | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<FichajeAdmin | null>(null);
+  const [historyLog, setHistoryLog] = useState<EditLogEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [editTarget, setEditTarget] = useState<FichajeAdmin | null>(null);
   const [editForm, setEditForm] = useState<EditForm>({
     start_time: "",
@@ -233,6 +279,18 @@ export default function AdminFichajesPage() {
       late_minutes: f.late_minutes != null ? String(f.late_minutes) : "",
       edit_comment: "",
     });
+  };
+
+  const openHistory = async (f: FichajeAdmin) => {
+    setHistoryTarget(f);
+    setHistoryLoading(true);
+    setHistoryLog([]);
+    try {
+      const res = await api.get<EditLogEntry[]>(`/fichajes/admin/${f.id}/history`);
+      setHistoryLog(res.data);
+    } finally {
+      setHistoryLoading(false);
+    }
   };
 
   const handleSave = async () => {
@@ -397,7 +455,7 @@ export default function AdminFichajesPage() {
                       )}
                     </td>
                     <td className="p-3">
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="flex items-center justify-center gap-1 flex-wrap">
                         <Button
                           size="sm"
                           variant="outline"
@@ -405,8 +463,19 @@ export default function AdminFichajesPage() {
                           className="flex items-center gap-1 text-xs"
                           title="Ver ubicaciones"
                         >
-                          <MapPin className="w-3 h-3" />
+                          <MapPin className="w-3 h-3" aria-hidden="true" />
                         </Button>
+                        {f.last_edited_at && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openHistory(f)}
+                            className="flex items-center gap-1 text-xs text-amber-700 border-amber-300 hover:bg-amber-50"
+                            title="Ver historial de cambios"
+                          >
+                            <History className="w-3 h-3" aria-hidden="true" />
+                          </Button>
+                        )}
                         {(f.status === "active" || f.status === "paused") && (
                           <Button
                             size="sm"
@@ -414,7 +483,7 @@ export default function AdminFichajesPage() {
                             onClick={() => handleFinalize(f.id)}
                             className="flex items-center gap-1 text-xs"
                           >
-                            <CheckCircle2 className="w-3 h-3" />
+                            <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
                             Finalizar
                           </Button>
                         )}
@@ -424,7 +493,7 @@ export default function AdminFichajesPage() {
                           onClick={() => openEdit(f)}
                           className="flex items-center gap-1 text-xs"
                         >
-                          <Pencil className="w-3 h-3" />
+                          <Pencil className="w-3 h-3" aria-hidden="true" />
                           Editar
                         </Button>
                       </div>
@@ -439,6 +508,104 @@ export default function AdminFichajesPage() {
 
       {/* Geo modal */}
       {geoTarget && <GeoModal fichaje={geoTarget} onClose={() => setGeoTarget(null)} />}
+
+      {/* History dialog */}
+      <Dialog open={historyTarget != null} onOpenChange={(open) => !open && setHistoryTarget(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="w-4 h-4 text-amber-600" aria-hidden="true" />
+              Historial de cambios
+              {historyTarget?.user && (
+                <span className="text-sm font-normal text-muted-foreground ml-1">
+                  — {historyTarget.user.full_name}
+                </span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+
+          {historyLoading && (
+            <div className="space-y-3 py-2">
+              {[1, 2].map((i) => (
+                <div key={i} className="border rounded-lg p-4 space-y-2">
+                  <div className="h-4 w-40 animate-pulse bg-slate-200 rounded" />
+                  <div className="h-3 w-64 animate-pulse bg-slate-200 rounded" />
+                  <div className="h-16 w-full animate-pulse bg-slate-200 rounded" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!historyLoading && historyLog.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No hay modificaciones registradas para este fichaje.
+            </p>
+          )}
+
+          {!historyLoading && historyLog.length > 0 && (
+            <div className="space-y-4 py-2">
+              {historyLog.map((entry, idx) => (
+                <div key={entry.id} className="border rounded-lg overflow-hidden">
+                  {/* Entry header */}
+                  <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="font-semibold text-slate-800">
+                        {idx === 0 ? (
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+                            Última modificación
+                          </span>
+                        ) : (
+                          `Modificación #${historyLog.length - idx}`
+                        )}
+                      </span>
+                      <span className="text-slate-400">·</span>
+                      <span className="text-slate-500">
+                        {format(new Date(entry.edited_at + "Z"), "dd/MM/yyyy HH:mm")}
+                      </span>
+                      {entry.edited_by && (
+                        <>
+                          <span className="text-slate-400">·</span>
+                          <span className="text-slate-600">{entry.edited_by.full_name}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Comment */}
+                  <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 flex items-start gap-1.5 text-sm">
+                    <MessageSquare className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-600" aria-hidden="true" />
+                    <span className="text-amber-800 italic">{entry.comment}</span>
+                  </div>
+
+                  {/* Diff table */}
+                  {Object.keys(entry.changes).length > 0 ? (
+                    <div className="divide-y text-sm">
+                      {Object.entries(entry.changes).map(([field, change]) => (
+                        <div key={field} className="grid grid-cols-[120px_1fr_1fr] items-stretch">
+                          <div className="px-3 py-2 bg-slate-50 font-medium text-slate-600 text-xs flex items-center border-r">
+                            {FIELD_LABELS[field] ?? field}
+                          </div>
+                          <div className="px-3 py-2 bg-red-50 text-red-700 flex items-center gap-1.5 border-r">
+                            <span className="font-bold text-red-400 text-xs">−</span>
+                            <span className="font-mono text-xs">{formatFieldValue(field, change.before)}</span>
+                          </div>
+                          <div className="px-3 py-2 bg-green-50 text-green-700 flex items-center gap-1.5">
+                            <span className="font-bold text-green-500 text-xs">+</span>
+                            <span className="font-mono text-xs">{formatFieldValue(field, change.after)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="px-4 py-2 text-xs text-muted-foreground">Sin cambios en campos registrados.</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Edit dialog */}
       <Dialog open={editTarget != null} onOpenChange={(open) => !open && setEditTarget(null)}>

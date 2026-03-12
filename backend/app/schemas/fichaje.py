@@ -67,6 +67,7 @@ class FichajeRead(BaseModel):
     modalidad: Optional[str] = None
     rest_violation: Optional[bool] = None
     edit_comment: Optional[str] = None
+    last_edited_at: Optional[datetime] = None
     pausas: List[PausaRead] = []
 
     model_config = {"from_attributes": True}
@@ -85,3 +86,16 @@ class FichajeAdminUpdate(BaseModel):
     out_of_range: Optional[bool] = None
     modalidad: Optional[str] = None
     edit_comment: str = Field(min_length=3)
+
+
+class FieldChange(BaseModel):
+    before: Optional[str] = None
+    after: Optional[str] = None
+
+
+class FichajeEditLogRead(BaseModel):
+    id: UUID
+    edited_at: datetime
+    edited_by: Optional[UserBasic] = None
+    comment: str
+    changes: dict[str, FieldChange]
