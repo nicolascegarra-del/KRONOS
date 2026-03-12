@@ -338,7 +338,30 @@ async def admin_end_fichaje(
     if fichaje.status == FichajeStatus.finished:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Shift is already finished")
 
+    import json
+    from app.models.fichajeeditlog import FichajeEditLog
+
     now = _now()
+
+    # Snapshot before force-end so it appears correctly in edit history
+    original_snapshot = {
+        "start_time": fichaje.start_time.isoformat() if fichaje.start_time else None,
+        "end_time": fichaje.end_time.isoformat() if fichaje.end_time else None,
+        "status": fichaje.status.value if fichaje.status else None,
+        "modalidad": fichaje.modalidad,
+        "total_minutes": fichaje.total_minutes,
+        "late_minutes": fichaje.late_minutes,
+        "out_of_range": fichaje.out_of_range,
+        "edit_comment": fichaje.edit_comment,
+    }
+    force_end_log = FichajeEditLog(
+        fichaje_id=fichaje.id,
+        edited_by_id=admin.id,
+        comment="Jornada finalizada manualmente por el administrador",
+        original_data=json.dumps(original_snapshot),
+    )
+    session.add(force_end_log)
+
     for p in fichaje.pausas:
         if p.end_time is None:
             p.end_time = now
@@ -347,6 +370,8 @@ async def admin_end_fichaje(
     fichaje.end_time = now
     fichaje.status = FichajeStatus.finished
     fichaje.total_minutes = calculate_total_minutes(fichaje, fichaje.pausas)
+    fichaje.last_edited_by_id = admin.id
+    fichaje.last_edited_at = now
     session.add(fichaje)
     await session.commit()
     return await _reload(session, fichaje.id)
@@ -381,7 +406,7 @@ async def admin_delete_fichaje(
     await session.commit()
 
 
-@router.patch("/admin/{fichaje_id}", response_model=FichajeRead)
+@router.patch("/admin/{fichaje_id}", response_model=FichajeAdminRead)
 async def admin_edit_fichaje(
     fichaje_id: UUID,
     body: FichajeAdminUpdate,
@@ -450,7 +475,7 @@ async def admin_edit_fichaje(
     return await _reload(session, fichaje.id)
 
 
-_DIFF_FIELDS = ["start_time", "end_time", "status", "modalidad", "total_minutes", "late_minutes"]
+_DIFF_FIELDS = ["start_time", "end_time", "status", "modalidad", "total_minutes", "late_minutes", "out_of_range"]
 
 
 def _snapshot_from_fichaje(f: "Fichaje") -> dict:

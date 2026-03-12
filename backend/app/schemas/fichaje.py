@@ -66,8 +66,6 @@ class FichajeRead(BaseModel):
     out_of_range: Optional[bool] = None
     modalidad: Optional[str] = None
     rest_violation: Optional[bool] = None
-    edit_comment: Optional[str] = None
-    last_edited_at: Optional[datetime] = None
     pausas: List[PausaRead] = []
 
     model_config = {"from_attributes": True}
@@ -75,6 +73,8 @@ class FichajeRead(BaseModel):
 
 class FichajeAdminRead(FichajeRead):
     user: Optional[UserBasic] = None
+    edit_comment: Optional[str] = None
+    last_edited_at: Optional[datetime] = None
 
 
 class FichajeAdminUpdate(BaseModel):

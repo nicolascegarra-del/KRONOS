@@ -175,7 +175,7 @@ interface EditForm {
 
 function fmtDatetime(iso?: string): string {
   if (!iso) return "—";
-  return format(new Date(iso), "dd/MM/yyyy HH:mm");
+  return format(new Date(iso.endsWith("Z") ? iso : iso + "Z"), "dd/MM/yyyy HH:mm");
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -185,6 +185,7 @@ const FIELD_LABELS: Record<string, string> = {
   modalidad: "Modalidad",
   total_minutes: "Min. trabajados",
   late_minutes: "Min. tarde",
+  out_of_range: "Fuera de rango",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -204,6 +205,7 @@ function formatFieldValue(field: string, value: string | null): string {
   if (field === "status") return STATUS_LABELS[value] ?? value;
   if (field === "modalidad") return value === "teletrabajo" ? "Teletrabajo" : "Presencial";
   if (field === "total_minutes" || field === "late_minutes") return `${value} min`;
+  if (field === "out_of_range") return value === "True" || value === "true" ? "Sí" : "No";
   return value;
 }
 
@@ -224,6 +226,7 @@ export default function AdminFichajesPage() {
   const [historyTarget, setHistoryTarget] = useState<FichajeAdmin | null>(null);
   const [historyLog, setHistoryLog] = useState<EditLogEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<FichajeAdmin | null>(null);
   const [editForm, setEditForm] = useState<EditForm>({
     start_time: "",
@@ -285,9 +288,12 @@ export default function AdminFichajesPage() {
     setHistoryTarget(f);
     setHistoryLoading(true);
     setHistoryLog([]);
+    setHistoryError(null);
     try {
       const res = await api.get<EditLogEntry[]>(`/fichajes/admin/${f.id}/history`);
       setHistoryLog(res.data);
+    } catch {
+      setHistoryError("Error al cargar el historial. Inténtalo de nuevo.");
     } finally {
       setHistoryLoading(false);
     }
@@ -536,13 +542,19 @@ export default function AdminFichajesPage() {
             </div>
           )}
 
-          {!historyLoading && historyLog.length === 0 && (
+          {!historyLoading && historyError && (
+            <p className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded text-center" role="alert">
+              {historyError}
+            </p>
+          )}
+
+          {!historyLoading && !historyError && historyLog.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-8">
               No hay modificaciones registradas para este fichaje.
             </p>
           )}
 
-          {!historyLoading && historyLog.length > 0 && (
+          {!historyLoading && !historyError && historyLog.length > 0 && (
             <div className="space-y-4 py-2">
               {historyLog.map((entry, idx) => (
                 <div key={entry.id} className="border rounded-lg overflow-hidden">
