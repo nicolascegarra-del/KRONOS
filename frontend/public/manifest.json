@@ -1,9 +1,9 @@
 {
-  "name": "Fichajes",
-  "short_name": "Fichajes",
-  "description": "Worker time tracking app",
+  "name": "KRONOS by klyp",
+  "short_name": "KRONOS",
+  "description": "Sistema de control de fichajes",
   "theme_color": "#0f172a",
-  "background_color": "#ffffff",
+  "background_color": "#0f172a",
   "display": "standalone",
   "start_url": "/",
   "orientation": "portrait",
@@ -19,6 +19,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable any"
+    },
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }
