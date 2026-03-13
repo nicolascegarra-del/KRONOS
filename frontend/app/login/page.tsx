@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Smartphone, ChevronDown, ChevronUp, ShieldCheck } from "lucide-react";
+import { Smartphone, ChevronDown, ChevronUp, ShieldCheck, AlertCircle, UserX, Lock } from "lucide-react";
 
 function PwaInstructions() {
   const [open, setOpen] = useState(false);
@@ -62,7 +62,7 @@ export default function LoginPage() {
   const { login, isLoading } = useAuthStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; type: "disabled" | "notfound" | "generic" } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,9 +78,15 @@ export default function LoginPage() {
         router.replace("/worker/dashboard");
       }
     } catch (e: any) {
-      setError(
-        e.response?.data?.detail || "Credenciales incorrectas. Inténtalo de nuevo."
-      );
+      const detail: string = e.response?.data?.detail ?? "";
+      const status: number = e.response?.status ?? 0;
+      if (status === 403 || detail.toLowerCase().includes("desactivada")) {
+        setError({ message: "Tu cuenta está desactivada. Contacta con tu administrador.", type: "disabled" });
+      } else if (detail.toLowerCase().includes("no existe") || detail.toLowerCase().includes("ninguna cuenta")) {
+        setError({ message: "No existe ninguna cuenta con ese email.", type: "notfound" });
+      } else {
+        setError({ message: detail || "Credenciales incorrectas. Inténtalo de nuevo.", type: "generic" });
+      }
     }
   };
 
@@ -142,12 +148,25 @@ export default function LoginPage() {
               </div>
 
               {error && (
-                <p
+                <div
                   role="alert"
-                  className="text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg"
+                  className={`flex items-start gap-2.5 text-sm px-3 py-2.5 rounded-lg border ${
+                    error.type === "disabled"
+                      ? "bg-amber-50 border-amber-200 text-amber-800"
+                      : error.type === "notfound"
+                      ? "bg-blue-50 border-blue-200 text-blue-800"
+                      : "bg-red-50 border-red-200 text-red-700"
+                  }`}
                 >
-                  {error}
-                </p>
+                  {error.type === "disabled" ? (
+                    <UserX className="w-4 h-4 shrink-0 mt-0.5" />
+                  ) : error.type === "notfound" ? (
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  ) : (
+                    <Lock className="w-4 h-4 shrink-0 mt-0.5" />
+                  )}
+                  <span>{error.message}</span>
+                </div>
               )}
 
               <button
