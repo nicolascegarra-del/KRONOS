@@ -412,3 +412,77 @@ async def test_superadmin_users_include_company_name(
     assert admin_data["company_name"] == "Test Company"
     assert worker_data["company_name"] == "Test Company"
     assert sa_data["company_name"] is None
+
+
+@pytest.mark.asyncio
+async def test_company_feature_flags_default_true(
+    client: AsyncClient, superadmin_user: User, company: Company
+):
+    """New companies have schedule_enabled and vacation_enabled True by default."""
+    token = await get_token(client, "superadmin@test.com", "Super1234!")
+    resp = await client.get("/companies", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    data = resp.json()[0]
+    assert data["schedule_enabled"] is True
+    assert data["vacation_enabled"] is True
+
+
+@pytest.mark.asyncio
+async def test_superadmin_can_toggle_schedule_and_vacation(
+    client: AsyncClient, superadmin_user: User, company: Company
+):
+    """Superadmin can disable and re-enable schedule and vacation features."""
+    token = await get_token(client, "superadmin@test.com", "Super1234!")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Disable both
+    resp = await client.put(
+        f"/companies/{company.id}",
+        headers=headers,
+        json={"schedule_enabled": False, "vacation_enabled": False},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["schedule_enabled"] is False
+    assert data["vacation_enabled"] is False
+
+    # Re-enable only schedule
+    resp = await client.put(
+        f"/companies/{company.id}",
+        headers=headers,
+        json={"schedule_enabled": True},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["schedule_enabled"] is True
+    assert data["vacation_enabled"] is False  # unchanged
+
+
+@pytest.mark.asyncio
+async def test_companies_features_endpoint_reflects_flags(
+    client: AsyncClient,
+    superadmin_user: User,
+    company: Company,
+    admin_user: User,
+):
+    """GET /companies/features returns the current feature flags for admin's company."""
+    sa_token = await get_token(client, "superadmin@test.com", "Super1234!")
+    sa_headers = {"Authorization": f"Bearer {sa_token}"}
+
+    # Disable vacation
+    await client.put(
+        f"/companies/{company.id}",
+        headers=sa_headers,
+        json={"vacation_enabled": False},
+    )
+
+    # Admin fetches features — should see vacation_enabled=False
+    admin_token = await get_token(client, "admin@test.com", "Admin1234!")
+    resp = await client.get(
+        "/companies/features",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["schedule_enabled"] is True
+    assert data["vacation_enabled"] is False

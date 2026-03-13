@@ -210,6 +210,10 @@ async def update_company(
         company.max_workers = body.max_workers
     if body.geo_enabled is not None:
         company.geo_enabled = body.geo_enabled
+    if body.schedule_enabled is not None:
+        company.schedule_enabled = body.schedule_enabled
+    if body.vacation_enabled is not None:
+        company.vacation_enabled = body.vacation_enabled
     if body.nif is not None:
         company.nif = body.nif
     if body.address is not None:
