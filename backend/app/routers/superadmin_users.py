@@ -15,7 +15,7 @@ from app.models.fichajeeditlog import FichajeEditLog
 from app.models.pausa import Pausa
 from app.models.user import User, UserRole
 from app.models.worker_schedule import WorkerSchedule
-from app.schemas.user import UserRead, SuperadminUserUpdate
+from app.schemas.user import UserRead, SuperadminUserCreate, SuperadminUserUpdate
 from app.services.auth import hash_password
 
 
@@ -23,6 +23,33 @@ class BulkUserDelete(BaseModel):
     user_ids: List[UUID]
 
 router = APIRouter(prefix="/superadmin/users", tags=["superadmin-users"])
+
+
+@router.post("", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+async def create_user(
+    body: SuperadminUserCreate,
+    _sa: User = Depends(require_superadmin),
+    session: AsyncSession = Depends(get_session),
+):
+    existing = await session.execute(select(User).where(User.email == body.email))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El email ya está registrado")
+
+    user = User(
+        email=body.email,
+        full_name=body.full_name,
+        hashed_password=hash_password(body.password),
+        role=body.role,
+        company_id=body.company_id,
+        scheduled_start=body.scheduled_start,
+        scheduled_end=body.scheduled_end,
+        dni=body.dni,
+        is_active=body.is_active,
+    )
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+    return user
 
 
 @router.get("", response_model=list[UserRead])

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
@@ -23,6 +23,16 @@ export default function WorkerLayout({
   const router = useRouter();
   const { user, logout, setUser } = useAuthStore();
   const [acceptingNotice, setAcceptingNotice] = useState(false);
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.company_id) {
+      api.get<{ logo_url?: string; name: string }>("/companies/mine")
+        .then((r) => { setCompanyLogo(r.data.logo_url ?? null); setCompanyName(r.data.name); })
+        .catch(() => {});
+    }
+  }, [user?.company_id]);
 
   const handleAcceptNotice = async () => {
     setAcceptingNotice(true);
@@ -46,7 +56,7 @@ export default function WorkerLayout({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
             <div className="flex items-center gap-2 text-slate-800">
-              <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0" />
+              <ShieldCheck className="w-5 h-5 text-primary shrink-0" />
               <h2 className="text-lg font-semibold">Información sobre protección de datos</h2>
             </div>
             <div className="text-sm text-slate-600 space-y-3 leading-relaxed">
@@ -79,8 +89,23 @@ export default function WorkerLayout({
       )}
 
       {/* Top header */}
-      <header className="bg-slate-900 text-white px-4 py-3 flex items-center">
-        <img src="/logo_kronos.png" alt="Kronos" className="h-10 w-auto" />
+      <header className="bg-slate-900 text-white px-4 py-3 flex items-center gap-3">
+        {companyLogo ? (
+          <div className="flex items-center gap-2">
+            <img src={companyLogo} alt={companyName ?? "Logo"} className="h-9 w-auto max-w-[130px] object-contain rounded" />
+            <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wide leading-none">by Kronos</span>
+          </div>
+        ) : (
+          <img src="/logo_kronos.png" alt="Kronos" className="h-10 w-auto" />
+        )}
+        <div className="flex-1" />
+        <button
+          onClick={handleLogout}
+          title={user?.email}
+          className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+        >
+          <LogOut className="w-5 h-5" />
+        </button>
       </header>
 
       {/* Main content */}
@@ -106,13 +131,6 @@ export default function WorkerLayout({
               {label}
             </Link>
           ))}
-          <button
-            onClick={handleLogout}
-            className="flex-1 flex flex-col items-center py-3 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <LogOut className="w-5 h-5 mb-1" />
-            Salir
-          </button>
         </div>
       </nav>
     </div>

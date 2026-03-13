@@ -8,6 +8,7 @@ export interface AuthUser {
   scheduled_start?: string;
   geo_consent: boolean | null;
   privacy_notice_accepted: boolean | null;
+  company_id: string | null;
 }
 
 export async function loginUser(email: string, password: string): Promise<AuthUser> {
@@ -30,6 +31,7 @@ export async function loginUser(email: string, password: string): Promise<AuthUs
     role: payload.role,
     geo_consent: payload.geo_consent ?? null,
     privacy_notice_accepted: payload.privacy_notice_accepted ?? null,
+    company_id: payload.company_id ?? null,
   };
 }
 

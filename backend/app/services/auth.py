@@ -33,6 +33,7 @@ def create_access_token(
     full_name: str = "",
     geo_consent: Optional[bool] = None,
     privacy_notice_accepted: Optional[bool] = None,
+    company_id: Optional[UUID] = None,
 ) -> str:
     return _create_token(
         {
@@ -41,6 +42,7 @@ def create_access_token(
             "full_name": full_name,
             "geo_consent": geo_consent,
             "privacy_notice_accepted": privacy_notice_accepted,
+            "company_id": str(company_id) if company_id else None,
             "type": "access",
         },
         timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),

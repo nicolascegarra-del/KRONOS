@@ -103,6 +103,9 @@ async def _run_column_migrations() -> None:
         await conn.execute(text(
             'CREATE INDEX IF NOT EXISTS ix_admin_access_log_accessed_at ON admin_access_log (accessed_at)'
         ))
+        await conn.execute(text(
+            'ALTER TABLE company ADD COLUMN IF NOT EXISTS logo_url TEXT'
+        ))
 
 
 @asynccontextmanager

@@ -1,14 +1,15 @@
+import base64
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
-from app.dependencies import require_superadmin
+from app.dependencies import get_current_user, require_superadmin
 from app.models.company import Company
 from app.models.user import User, UserRole
-from app.schemas.company import CompanyCreate, CompanyRead, CompanyUpdate
+from app.schemas.company import CompanyCreate, CompanyPublic, CompanyRead, CompanyUpdate
 from app.services.auth import hash_password
 
 router = APIRouter(prefix="/companies", tags=["companies"])
@@ -33,6 +34,7 @@ def _to_read(c: Company, worker_count: int) -> CompanyRead:
         geo_enabled=c.geo_enabled,
         worker_count=worker_count,
         created_at=c.created_at,
+        logo_url=c.logo_url,
         nif=c.nif,
         address=c.address,
         city=c.city,
@@ -45,6 +47,66 @@ def _to_read(c: Company, worker_count: int) -> CompanyRead:
         subscription_start=c.subscription_start,
         subscription_end=c.subscription_end,
     )
+
+
+@router.get("/mine", response_model=CompanyPublic)
+async def get_my_company(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Return the current user's company (for admin/worker layouts to load logo)."""
+    if not user.company_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No company assigned")
+    result = await session.execute(select(Company).where(Company.id == user.company_id))
+    company = result.scalar_one_or_none()
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    return company
+
+
+@router.post("/{company_id}/logo", response_model=CompanyRead)
+async def upload_company_logo(
+    company_id: UUID,
+    file: UploadFile = File(...),
+    _: User = Depends(require_superadmin),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(select(Company).where(Company.id == company_id))
+    company = result.scalar_one_or_none()
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empresa no encontrada")
+
+    allowed = {"image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/gif"}
+    if file.content_type not in allowed:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Formato no permitido (png, jpg, webp, svg)")
+
+    content = await file.read()
+    if len(content) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Imagen demasiado grande (máx 2 MB)")
+
+    b64 = base64.b64encode(content).decode()
+    company.logo_url = f"data:{file.content_type};base64,{b64}"
+    session.add(company)
+    await session.commit()
+    await session.refresh(company)
+    return _to_read(company, await _worker_count(session, company.id))
+
+
+@router.delete("/{company_id}/logo", response_model=CompanyRead)
+async def delete_company_logo(
+    company_id: UUID,
+    _: User = Depends(require_superadmin),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(select(Company).where(Company.id == company_id))
+    company = result.scalar_one_or_none()
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empresa no encontrada")
+    company.logo_url = None
+    session.add(company)
+    await session.commit()
+    await session.refresh(company)
+    return _to_read(company, await _worker_count(session, company.id))
 
 
 @router.get("", response_model=list[CompanyRead])

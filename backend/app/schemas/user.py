@@ -25,6 +25,18 @@ class UserUpdate(BaseModel):
     dni: Optional[str] = None
 
 
+class SuperadminUserCreate(BaseModel):
+    email: EmailStr
+    full_name: str
+    password: str
+    role: UserRole = UserRole.worker
+    company_id: Optional[UUID] = None
+    scheduled_start: Optional[time] = None
+    scheduled_end: Optional[time] = None
+    dni: Optional[str] = None
+    is_active: bool = True
+
+
 class SuperadminUserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None

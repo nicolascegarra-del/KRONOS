@@ -33,5 +33,7 @@ class Company(SQLModel, table=True):
     subscription_start: Optional[datetime] = Field(default=None)
     subscription_end: Optional[datetime] = Field(default=None)
 
+    logo_url: Optional[str] = Field(default=None)  # base64 data URL
+
     users: List["User"] = Relationship(back_populates="company")
     work_centers: List["WorkCenter"] = Relationship(back_populates="company")

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
@@ -12,7 +12,6 @@ import {
   Tag,
   Settings,
   LogOut,
-  Menu,
   X,
   MapPin,
   MoreHorizontal,
@@ -30,7 +29,6 @@ const navItems = [
   { href: "/admin/settings", label: "Configuración", icon: Settings },
 ];
 
-// Bottom nav: 4 main items + "Más" button
 const bottomNavItems = navItems.slice(0, 4);
 const moreNavItems = navItems.slice(4);
 
@@ -44,6 +42,18 @@ export default function AdminLayout({
   const { user, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.company_id) {
+      import("@/lib/api").then(({ api }) => {
+        api.get<{ logo_url?: string; name: string }>("/companies/mine")
+          .then((r) => { setCompanyLogo(r.data.logo_url ?? null); setCompanyName(r.data.name); })
+          .catch(() => {});
+      });
+    }
+  }, [user?.company_id]);
 
   const handleLogout = async () => {
     await logout();
@@ -54,7 +64,7 @@ export default function AdminLayout({
 
   return (
     <div className="min-h-screen flex bg-slate-50">
-      {/* ── Sidebar (desktop always visible, mobile slide-in) ── */}
+      {/* ── Sidebar ── */}
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white flex flex-col transition-transform duration-200",
@@ -62,8 +72,17 @@ export default function AdminLayout({
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         )}
       >
-        <div className="flex items-center justify-between px-4 py-5 border-b border-slate-700">
-          <img src="/logo_kronos.png" alt="Kronos" className="h-12 w-auto max-w-[180px]" />
+        <div className="flex items-center justify-between px-4 py-4 border-b border-slate-700">
+          <div className="flex flex-col gap-2 min-w-0">
+            {companyLogo ? (
+              <>
+                <img src={companyLogo} alt={companyName ?? "Logo"} className="h-10 w-auto max-w-[160px] object-contain rounded" />
+                <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wide">Powered by Kronos</span>
+              </>
+            ) : (
+              <img src="/logo_kronos.png" alt="Kronos" className="h-12 w-auto max-w-[180px]" />
+            )}
+          </div>
           <button className="md:hidden" onClick={() => setSidebarOpen(false)}>
             <X className="w-5 h-5" />
           </button>
@@ -87,17 +106,6 @@ export default function AdminLayout({
             </Link>
           ))}
         </nav>
-
-        <div className="p-4 border-t border-slate-700">
-          <p className="text-xs text-slate-400 mb-1">{user?.email}</p>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            Cerrar sesión
-          </button>
-        </div>
       </aside>
 
       {/* Mobile sidebar overlay */}
@@ -111,13 +119,21 @@ export default function AdminLayout({
       {/* ── Main content ── */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="bg-slate-900 text-white px-4 py-3 flex items-center gap-3">
-          {/* Logo only on mobile (desktop sidebar already shows it) */}
-          <img src="/logo_kronos.png" alt="Kronos" className="h-10 w-auto md:hidden" />
+          {companyLogo
+            ? <img src={companyLogo} alt={companyName ?? "Logo"} className="h-9 w-auto max-w-[120px] object-contain rounded md:hidden" />
+            : <img src="/logo_kronos.png" alt="Kronos" className="h-10 w-auto md:hidden" />
+          }
           <div className="flex-1" />
           <NotificationBell />
+          <button
+            onClick={handleLogout}
+            title={user?.email}
+            className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
         </header>
 
-        {/* Extra padding on mobile so content clears the bottom nav */}
         <main className="flex-1 p-4 md:p-8 overflow-auto pb-24 md:pb-8">
           {children}
         </main>
@@ -142,7 +158,6 @@ export default function AdminLayout({
             </Link>
           ))}
 
-          {/* "Más" button */}
           <button
             onClick={() => setMoreOpen(true)}
             className={cn(
@@ -189,16 +204,6 @@ export default function AdminLayout({
                   {label}
                 </Link>
               ))}
-              <div className="border-t pt-2 mt-2">
-                <p className="text-xs text-muted-foreground px-3 mb-1">{user?.email}</p>
-                <button
-                  onClick={handleLogout}
-                  className="flex items-center gap-3 px-3 py-3 rounded-md text-sm font-medium text-slate-600 hover:bg-slate-100 w-full transition-colors"
-                >
-                  <LogOut className="w-5 h-5" />
-                  Cerrar sesión
-                </button>
-              </div>
             </div>
           </div>
         </>

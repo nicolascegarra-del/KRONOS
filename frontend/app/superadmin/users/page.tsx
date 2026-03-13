@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Pencil, Trash2, FileX, Users, ChevronDown, X } from "lucide-react";
+import { Pencil, Trash2, FileX, Users, ChevronDown, X, UserPlus } from "lucide-react";
 
 interface CompanyOption {
   id: string;
@@ -27,18 +27,27 @@ interface UserRow {
   company_id: string | null;
   company_name: string | null;
   scheduled_start: string | null;
+  scheduled_end: string | null;
+  dni: string | null;
   created_at: string;
 }
 
-interface EditForm {
+interface UserForm {
   email: string;
   full_name: string;
   password: string;
   role: string;
   company_id: string;
   scheduled_start: string;
+  scheduled_end: string;
+  dni: string;
   is_active: boolean;
 }
+
+const EMPTY_FORM: UserForm = {
+  email: "", full_name: "", password: "", role: "worker",
+  company_id: "", scheduled_start: "", scheduled_end: "", dni: "", is_active: true,
+};
 
 const ROLE_LABELS: Record<string, string> = {
   superadmin: "Superadmin",
@@ -59,7 +68,6 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
-// --- Searchable company selector ---
 function CompanySelect({
   companies,
   value,
@@ -78,7 +86,6 @@ function CompanySelect({
     c.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
@@ -90,21 +97,8 @@ function CompanySelect({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const handleSelect = (id: string) => {
-    onChange(id);
-    setOpen(false);
-    setSearch("");
-  };
-
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onChange("");
-    setSearch("");
-  };
-
   return (
     <div ref={ref} className="relative">
-      {/* Trigger button */}
       <button
         type="button"
         onClick={() => { setOpen((o) => !o); setSearch(""); }}
@@ -116,9 +110,8 @@ function CompanySelect({
         <div className="flex items-center gap-1 ml-2 shrink-0">
           {selected && (
             <span
-              onClick={handleClear}
+              onClick={(e) => { e.stopPropagation(); onChange(""); setSearch(""); }}
               className="cursor-pointer text-muted-foreground hover:text-foreground"
-              title="Quitar empresa"
             >
               <X className="w-3 h-3" />
             </span>
@@ -126,11 +119,8 @@ function CompanySelect({
           <ChevronDown className="w-4 h-4 text-muted-foreground" />
         </div>
       </button>
-
-      {/* Dropdown */}
       {open && (
         <div className="absolute z-50 mt-1 w-full rounded-md border bg-white shadow-lg">
-          {/* Search input */}
           <div className="p-2 border-b">
             <input
               autoFocus
@@ -142,9 +132,8 @@ function CompanySelect({
             />
           </div>
           <ul className="max-h-48 overflow-y-auto py-1">
-            {/* None option */}
             <li
-              onClick={() => handleSelect("")}
+              onClick={() => { onChange(""); setOpen(false); setSearch(""); }}
               className={`cursor-pointer px-3 py-2 text-sm hover:bg-slate-100 ${value === "" ? "bg-slate-50 font-medium" : ""}`}
             >
               <span className="text-muted-foreground italic">Sin empresa</span>
@@ -155,7 +144,7 @@ function CompanySelect({
               filtered.map((c) => (
                 <li
                   key={c.id}
-                  onClick={() => handleSelect(c.id)}
+                  onClick={() => { onChange(c.id); setOpen(false); setSearch(""); }}
                   className={`cursor-pointer px-3 py-2 text-sm hover:bg-slate-100 ${value === c.id ? "bg-blue-50 text-blue-700 font-medium" : ""}`}
                 >
                   {c.name}
@@ -169,29 +158,115 @@ function CompanySelect({
   );
 }
 
+function UserFormFields({
+  form,
+  setForm,
+  companies,
+  isCreate,
+}: {
+  form: UserForm;
+  setForm: React.Dispatch<React.SetStateAction<UserForm>>;
+  companies: CompanyOption[];
+  isCreate: boolean;
+}) {
+  const set = (field: keyof UserForm, value: unknown) =>
+    setForm((p) => ({ ...p, [field]: value }));
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label>Nombre completo</Label>
+          <Input value={form.full_name} onChange={(e) => set("full_name", e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label>DNI / NIF</Label>
+          <Input value={form.dni} onChange={(e) => set("dni", e.target.value)} placeholder="12345678A" />
+        </div>
+      </div>
+      <div className="space-y-1">
+        <Label>Email</Label>
+        <Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
+      </div>
+      <div className="space-y-1">
+        <Label>{isCreate ? "Contraseña" : "Nueva contraseña (dejar vacío para no cambiar)"}</Label>
+        <Input
+          type="password"
+          placeholder="••••••••"
+          value={form.password}
+          onChange={(e) => set("password", e.target.value)}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label>Rol</Label>
+          <select
+            value={form.role}
+            onChange={(e) => set("role", e.target.value)}
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+          >
+            <option value="superadmin">Superadmin</option>
+            <option value="admin">Admin</option>
+            <option value="worker">Trabajador</option>
+          </select>
+        </div>
+        <div className="space-y-1">
+          <Label>Empresa</Label>
+          <CompanySelect
+            companies={companies}
+            value={form.company_id}
+            onChange={(id) => set("company_id", id)}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label>Hora entrada (HH:MM)</Label>
+          <Input type="time" value={form.scheduled_start} onChange={(e) => set("scheduled_start", e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label>Hora salida (HH:MM)</Label>
+          <Input type="time" value={form.scheduled_end} onChange={(e) => set("scheduled_end", e.target.value)} />
+        </div>
+      </div>
+      {!isCreate && (
+        <div className="flex items-center gap-3">
+          <Label>Activo</Label>
+          <button
+            type="button"
+            onClick={() => set("is_active", !form.is_active)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.is_active ? "bg-primary" : "bg-slate-200"}`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.is_active ? "translate-x-6" : "translate-x-1"}`} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SuperadminUsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Selection
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Create dialog
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState<UserForm>(EMPTY_FORM);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   // Edit dialog
   const [editTarget, setEditTarget] = useState<UserRow | null>(null);
-  const [form, setForm] = useState<EditForm>({
-    email: "", full_name: "", password: "", role: "worker",
-    company_id: "", scheduled_start: "", is_active: true,
-  });
+  const [editForm, setEditForm] = useState<UserForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Bulk action state
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkMsg, setBulkMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
-  // Confirm dialog for destructive bulk actions
   const [confirmAction, setConfirmAction] = useState<null | "deleteUsers" | "deleteFichajes">(null);
 
   const load = async () => {
@@ -212,36 +287,53 @@ export default function SuperadminUsersPage() {
 
   useEffect(() => { load(); }, []);
 
-  // --- Selection helpers ---
   const selectableIds = users.filter((u) => u.role !== "superadmin").map((u) => u.id);
   const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectableIds));
+  const toggleOne = (id: string) => setSelected((prev) => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
 
-  const toggleAll = () => {
-    if (allSelected) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(selectableIds));
+  // --- Create ---
+  const handleCreate = async () => {
+    if (!createForm.password) { setCreateError("La contraseña es obligatoria"); return; }
+    setCreating(true);
+    setCreateError(null);
+    try {
+      await api.post("/superadmin/users", {
+        email: createForm.email,
+        full_name: createForm.full_name,
+        password: createForm.password,
+        role: createForm.role,
+        company_id: createForm.company_id || null,
+        scheduled_start: createForm.scheduled_start || null,
+        scheduled_end: createForm.scheduled_end || null,
+        dni: createForm.dni || null,
+      });
+      setCreateOpen(false);
+      setCreateForm(EMPTY_FORM);
+      await load();
+    } catch (e: any) {
+      setCreateError(e.response?.data?.detail || "Error al crear el usuario");
+    } finally {
+      setCreating(false);
     }
   };
 
-  const toggleOne = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
-  // --- Edit user ---
+  // --- Edit ---
   const openEdit = (u: UserRow) => {
     setEditTarget(u);
-    setForm({
+    setEditForm({
       email: u.email,
       full_name: u.full_name,
       password: "",
       role: u.role,
       company_id: u.company_id ?? "",
       scheduled_start: u.scheduled_start ?? "",
+      scheduled_end: u.scheduled_end ?? "",
+      dni: u.dni ?? "",
       is_active: u.is_active,
     });
     setSaveError(null);
@@ -253,14 +345,16 @@ export default function SuperadminUsersPage() {
     setSaveError(null);
     try {
       const body: Record<string, unknown> = {
-        email: form.email,
-        full_name: form.full_name,
-        role: form.role,
-        is_active: form.is_active,
-        company_id: form.company_id || null,
-        scheduled_start: form.scheduled_start || null,
+        email: editForm.email,
+        full_name: editForm.full_name,
+        role: editForm.role,
+        is_active: editForm.is_active,
+        company_id: editForm.company_id || null,
+        scheduled_start: editForm.scheduled_start || null,
+        scheduled_end: editForm.scheduled_end || null,
+        dni: editForm.dni || null,
       };
-      if (form.password) body.password = form.password;
+      if (editForm.password) body.password = editForm.password;
       await api.put(`/superadmin/users/${editTarget.id}`, body);
       setEditTarget(null);
       await load();
@@ -271,7 +365,7 @@ export default function SuperadminUsersPage() {
     }
   };
 
-  // --- Delete fichajes for a single user ---
+  // --- Bulk delete fichajes for single user ---
   const deleteFichajesForUser = async (u: UserRow) => {
     if (!confirm(`¿Borrar TODOS los fichajes de ${u.full_name}? Esta acción no se puede deshacer.`)) return;
     setBulkLoading(true);
@@ -287,7 +381,7 @@ export default function SuperadminUsersPage() {
     }
   };
 
-  // --- Bulk actions (confirmed via dialog) ---
+  // --- Bulk actions ---
   const executeBulkAction = async () => {
     if (!confirmAction || selected.size === 0) return;
     setBulkLoading(true);
@@ -297,9 +391,7 @@ export default function SuperadminUsersPage() {
       const selectedIds = Array.from(selected);
       if (confirmAction === "deleteFichajes") {
         const results = await Promise.all(
-          selectedIds.map((uid) =>
-            api.delete<{ deleted: number }>(`/superadmin/users/fichajes?user_id=${uid}`)
-          )
+          selectedIds.map((uid) => api.delete<{ deleted: number }>(`/superadmin/users/fichajes?user_id=${uid}`))
         );
         const total = results.reduce((acc, r) => acc + r.data.deleted, 0);
         setBulkMsg({ ok: true, text: `${total} fichaje(s) eliminados de ${selectedIds.length} usuario(s).` });
@@ -318,48 +410,31 @@ export default function SuperadminUsersPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
-        Cargando...
-      </div>
-    );
+    return <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">Cargando...</div>;
   }
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Usuarios</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">Usuarios</h1>
+        <Button onClick={() => { setCreateForm(EMPTY_FORM); setCreateError(null); setCreateOpen(true); }} className="flex items-center gap-2">
+          <UserPlus className="w-4 h-4" />
+          Crear usuario
+        </Button>
+      </div>
       {error && <p className="text-destructive text-sm mb-4">{error}</p>}
 
-      {/* Bulk action bar */}
       {selected.size > 0 && (
         <div className="flex items-center gap-3 mb-4 p-3 bg-slate-900 text-white rounded-lg text-sm">
           <Users className="w-4 h-4 shrink-0" />
           <span className="flex-1 font-medium">{selected.size} usuario(s) seleccionado(s)</span>
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-white border-white/30 hover:bg-white/10 hover:text-white"
-            disabled={bulkLoading}
-            onClick={() => setConfirmAction("deleteFichajes")}
-          >
-            <FileX className="w-3 h-3 mr-1" />
-            Borrar sus fichajes
+          <Button size="sm" variant="outline" className="text-white border-white/30 hover:bg-white/10 hover:text-white" disabled={bulkLoading} onClick={() => setConfirmAction("deleteFichajes")}>
+            <FileX className="w-3 h-3 mr-1" />Borrar sus fichajes
           </Button>
-          <Button
-            size="sm"
-            variant="destructive"
-            disabled={bulkLoading}
-            onClick={() => setConfirmAction("deleteUsers")}
-          >
-            <Trash2 className="w-3 h-3 mr-1" />
-            Borrar usuarios
+          <Button size="sm" variant="destructive" disabled={bulkLoading} onClick={() => setConfirmAction("deleteUsers")}>
+            <Trash2 className="w-3 h-3 mr-1" />Borrar usuarios
           </Button>
-          <button
-            className="ml-1 text-white/60 hover:text-white text-lg leading-none"
-            onClick={() => setSelected(new Set())}
-          >
-            ✕
-          </button>
+          <button className="ml-1 text-white/60 hover:text-white text-lg leading-none" onClick={() => setSelected(new Set())}>✕</button>
         </div>
       )}
 
@@ -375,13 +450,7 @@ export default function SuperadminUsersPage() {
             <thead className="bg-slate-50 border-b">
               <tr>
                 <th className="p-3 w-10">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={toggleAll}
-                    className="h-4 w-4 rounded border-gray-300"
-                    title="Seleccionar todos (excepto superadmins)"
-                  />
+                  <input type="checkbox" checked={allSelected} onChange={toggleAll} className="h-4 w-4 rounded border-gray-300" title="Seleccionar todos (excepto superadmins)" />
                 </th>
                 <th className="text-left p-3 font-medium">Nombre</th>
                 <th className="text-left p-3 font-medium">Email</th>
@@ -396,26 +465,16 @@ export default function SuperadminUsersPage() {
                 const isSuperadmin = u.role === "superadmin";
                 const isChecked = selected.has(u.id);
                 return (
-                  <tr
-                    key={u.id}
-                    className={`border-b last:border-0 hover:bg-slate-50 ${isChecked ? "bg-blue-50" : ""}`}
-                  >
+                  <tr key={u.id} className={`border-b last:border-0 hover:bg-slate-50 ${isChecked ? "bg-blue-50" : ""}`}>
                     <td className="p-3">
                       {!isSuperadmin && (
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => toggleOne(u.id)}
-                          className="h-4 w-4 rounded border-gray-300"
-                        />
+                        <input type="checkbox" checked={isChecked} onChange={() => toggleOne(u.id)} className="h-4 w-4 rounded border-gray-300" />
                       )}
                     </td>
                     <td className="p-3 font-medium">{u.full_name}</td>
                     <td className="p-3 text-muted-foreground">{u.email}</td>
                     <td className="p-3 text-center"><RoleBadge role={u.role} /></td>
-                    <td className="p-3 text-sm text-muted-foreground">
-                      {u.company_name ?? "—"}
-                    </td>
+                    <td className="p-3 text-sm text-muted-foreground">{u.company_name ?? "—"}</td>
                     <td className="p-3 text-center">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${u.is_active ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                         {u.is_active ? "Sí" : "No"}
@@ -427,14 +486,7 @@ export default function SuperadminUsersPage() {
                           <Pencil className="w-3 h-3" />
                         </Button>
                         {!isSuperadmin && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                            onClick={() => deleteFichajesForUser(u)}
-                            disabled={bulkLoading}
-                            title="Borrar fichajes de este usuario"
-                          >
+                          <Button size="sm" variant="ghost" className="text-amber-600 hover:text-amber-700 hover:bg-amber-50" onClick={() => deleteFichajesForUser(u)} disabled={bulkLoading} title="Borrar fichajes de este usuario">
                             <FileX className="w-3 h-3" />
                           </Button>
                         )}
@@ -452,9 +504,7 @@ export default function SuperadminUsersPage() {
       <Dialog open={confirmAction !== null} onOpenChange={(o) => !o && setConfirmAction(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>
-              {confirmAction === "deleteUsers" ? "Borrar usuarios" : "Borrar fichajes"}
-            </DialogTitle>
+            <DialogTitle>{confirmAction === "deleteUsers" ? "Borrar usuarios" : "Borrar fichajes"}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             {confirmAction === "deleteUsers"
@@ -462,9 +512,7 @@ export default function SuperadminUsersPage() {
               : `¿Eliminar todos los fichajes de los ${selected.size} usuario(s) seleccionado(s)? Los usuarios se conservarán.`}
           </p>
           <div className="flex gap-3 justify-end pt-2">
-            <Button variant="outline" onClick={() => setConfirmAction(null)}>
-              Cancelar
-            </Button>
+            <Button variant="outline" onClick={() => setConfirmAction(null)}>Cancelar</Button>
             <Button variant="destructive" onClick={executeBulkAction} disabled={bulkLoading}>
               {bulkLoading ? "Procesando..." : "Confirmar"}
             </Button>
@@ -472,87 +520,28 @@ export default function SuperadminUsersPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Create dialog */}
+      <Dialog open={createOpen} onOpenChange={(o) => !o && setCreateOpen(false)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle>Crear usuario</DialogTitle></DialogHeader>
+          <UserFormFields form={createForm} setForm={setCreateForm} companies={companies} isCreate={true} />
+          {createError && <p className="text-sm text-destructive">{createError}</p>}
+          <div className="flex gap-3 justify-end pt-2">
+            <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>Cancelar</Button>
+            <Button onClick={handleCreate} disabled={creating}>{creating ? "Creando..." : "Crear usuario"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Edit dialog */}
       <Dialog open={editTarget != null} onOpenChange={(open) => !open && setEditTarget(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Editar usuario</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-1">
-              <Label>Nombre completo</Label>
-              <Input
-                value={form.full_name}
-                onChange={(e) => setForm((p) => ({ ...p, full_name: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Email</Label>
-              <Input
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Nueva contraseña (dejar vacío para no cambiar)</Label>
-              <Input
-                type="password"
-                placeholder="••••••••"
-                value={form.password}
-                onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Rol</Label>
-              <select
-                value={form.role}
-                onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-              >
-                <option value="superadmin">Superadmin</option>
-                <option value="admin">Admin</option>
-                <option value="worker">Trabajador</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label>Empresa</Label>
-              <CompanySelect
-                companies={companies}
-                value={form.company_id}
-                onChange={(id) => setForm((p) => ({ ...p, company_id: id }))}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Hora de entrada programada (HH:MM)</Label>
-              <Input
-                type="time"
-                value={form.scheduled_start}
-                onChange={(e) => setForm((p) => ({ ...p, scheduled_start: e.target.value }))}
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <Label>Activo</Label>
-              <button
-                type="button"
-                onClick={() => setForm((p) => ({ ...p, is_active: !p.is_active }))}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.is_active ? "bg-primary" : "bg-slate-200"}`}
-              >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.is_active ? "translate-x-6" : "translate-x-1"}`} />
-              </button>
-            </div>
-
-            {saveError && <p className="text-sm text-destructive">{saveError}</p>}
-
-            <div className="flex gap-3 justify-end pt-2">
-              <Button variant="outline" onClick={() => setEditTarget(null)} disabled={saving}>
-                Cancelar
-              </Button>
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? "Guardando..." : "Guardar"}
-              </Button>
-            </div>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle>Editar usuario</DialogTitle></DialogHeader>
+          <UserFormFields form={editForm} setForm={setEditForm} companies={companies} isCreate={false} />
+          {saveError && <p className="text-sm text-destructive">{saveError}</p>}
+          <div className="flex gap-3 justify-end pt-2">
+            <Button variant="outline" onClick={() => setEditTarget(null)} disabled={saving}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={saving}>{saving ? "Guardando..." : "Guardar"}</Button>
           </div>
         </DialogContent>
       </Dialog>

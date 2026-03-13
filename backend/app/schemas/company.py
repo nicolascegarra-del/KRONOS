@@ -40,6 +40,7 @@ class CompanyRead(BaseModel):
     geo_enabled: bool
     worker_count: int
     created_at: datetime
+    logo_url: Optional[str] = None
     # Billing
     nif: Optional[str] = None
     address: Optional[str] = None
@@ -53,5 +54,14 @@ class CompanyRead(BaseModel):
     subscription_discount: Optional[float] = None
     subscription_start: Optional[datetime] = None
     subscription_end: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class CompanyPublic(BaseModel):
+    """Minimal company info for admin/worker layouts."""
+    id: UUID
+    name: str
+    logo_url: Optional[str] = None
 
     model_config = {"from_attributes": True}

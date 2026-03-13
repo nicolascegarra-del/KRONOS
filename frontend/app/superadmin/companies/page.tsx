@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Building2, Pencil, Trash2, Plus, MapPin, MapPinOff, FileX } from "lucide-react";
+import { Building2, Pencil, Trash2, Plus, MapPin, MapPinOff, FileX, ImagePlus } from "lucide-react";
 
 interface CompanyRead {
   id: string;
@@ -21,6 +21,7 @@ interface CompanyRead {
   geo_enabled: boolean;
   worker_count: number;
   created_at: string;
+  logo_url?: string;
   // Billing
   nif?: string;
   address?: string;
@@ -90,6 +91,46 @@ export default function CompaniesPage() {
   const [fichajesToDelete, setFichajesToDelete] = useState<CompanyRead | null>(null);
   const [fichajesLoading, setFichajesLoading] = useState(false);
   const [fichajesMsg, setFichajesMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Logo upload
+  const [logoUploading, setLogoUploading] = useState<string | null>(null); // company id being uploaded
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const [logoTargetId, setLogoTargetId] = useState<string | null>(null);
+
+  const handleLogoClick = (companyId: string) => {
+    setLogoTargetId(companyId);
+    logoInputRef.current?.click();
+  };
+
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !logoTargetId) return;
+    e.target.value = "";
+    setLogoUploading(logoTargetId);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      await api.post(`/companies/${logoTargetId}/logo`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      fetchCompanies();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || "Error al subir el logo");
+    } finally {
+      setLogoUploading(null);
+      setLogoTargetId(null);
+    }
+  };
+
+  const handleLogoDelete = async (companyId: string) => {
+    if (!confirm("¿Eliminar el logo de esta empresa?")) return;
+    try {
+      await api.delete(`/companies/${companyId}/logo`);
+      fetchCompanies();
+    } catch {
+      alert("Error al eliminar el logo");
+    }
+  };
 
   const fetchCompanies = () => {
     setLoading(true);
@@ -207,6 +248,9 @@ export default function CompaniesPage() {
         </p>
       )}
 
+      {/* Hidden file input for logo upload */}
+      <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={handleLogoChange} />
+
       {loading ? (
         <p className="text-muted-foreground text-sm">Cargando...</p>
       ) : companies.length === 0 ? (
@@ -216,10 +260,16 @@ export default function CompaniesPage() {
           {companies.map((c) => (
             <Card key={c.id}>
               <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Building2 className="w-5 h-5 text-slate-400" />
-                    <div>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* Logo preview or fallback icon */}
+                    <div className="shrink-0 w-12 h-12 rounded-lg border bg-slate-50 flex items-center justify-center overflow-hidden">
+                      {c.logo_url
+                        ? <img src={c.logo_url} alt={c.name} className="w-full h-full object-contain p-1" />
+                        : <Building2 className="w-5 h-5 text-slate-400" />
+                      }
+                    </div>
+                    <div className="min-w-0">
                       <p className="font-semibold">{c.name}</p>
                       <p className="text-xs text-muted-foreground">
                         {c.worker_count} / {c.max_workers} trabajadores ·{" "}
@@ -231,13 +281,32 @@ export default function CompaniesPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-1 shrink-0">
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => openEdit(c)}
-                      title="Editar empresa"
+                      onClick={() => handleLogoClick(c.id)}
+                      disabled={logoUploading === c.id}
+                      title={c.logo_url ? "Cambiar logo" : "Subir logo"}
+                      className="text-slate-500 hover:text-slate-700"
                     >
+                      {logoUploading === c.id
+                        ? <span className="text-xs">...</span>
+                        : <ImagePlus className="w-4 h-4" />
+                      }
+                    </Button>
+                    {c.logo_url && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleLogoDelete(c.id)}
+                        title="Eliminar logo"
+                        className="text-slate-400 hover:text-destructive"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="icon" onClick={() => openEdit(c)} title="Editar empresa">
                       <Pencil className="w-4 h-4" />
                     </Button>
                     <Button
