@@ -2,7 +2,7 @@ import base64
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from sqlalchemy import func, select, delete, update
+from sqlalchemy import func, select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
@@ -10,9 +10,7 @@ from app.dependencies import get_current_user, require_superadmin
 from app.models.adminaccesslog import AdminAccessLog
 from app.models.company import Company
 from app.models.fichaje import Fichaje
-from app.models.fichajeeditlog import FichajeEditLog
 from app.models.absence import Absence
-from app.models.pausa import Pausa
 from app.models.user import User, UserRole
 from app.models.worker_schedule import WorkerSchedule
 from app.schemas.company import CompanyCreate, CompanyPublic, CompanyRead, CompanyUpdate
@@ -260,18 +258,20 @@ async def delete_company(
     user_ids = [row[0] for row in users_result.all()]
 
     if user_ids:
-        # Get all fichaje IDs for these users
-        fichaje_result = await session.execute(select(Fichaje.id).where(Fichaje.user_id.in_(user_ids)))
-        fichaje_ids = [row[0] for row in fichaje_result.all()]
+        # Block deletion if the company has any fichajes — records must never be destroyed
+        fichaje_count_result = await session.execute(
+            select(func.count()).select_from(Fichaje).where(Fichaje.user_id.in_(user_ids))
+        )
+        if fichaje_count_result.scalar_one() > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "No se puede eliminar la empresa porque tiene fichajes registrados. "
+                    "Desactiva la empresa en su lugar."
+                ),
+            )
 
-        if fichaje_ids:
-            await session.execute(delete(FichajeEditLog).where(FichajeEditLog.fichaje_id.in_(fichaje_ids)))
-            await session.execute(delete(Pausa).where(Pausa.fichaje_id.in_(fichaje_ids)))
-            await session.execute(delete(Fichaje).where(Fichaje.id.in_(fichaje_ids)))
-
-        # Nullify FK references to these users before deleting them
-        await session.execute(update(Fichaje).where(Fichaje.last_edited_by_id.in_(user_ids)).values(last_edited_by_id=None))
-        await session.execute(delete(FichajeEditLog).where(FichajeEditLog.edited_by_id.in_(user_ids)))
+        # No fichajes — safe to remove schedules, absences, access logs and deactivate users
         await session.execute(delete(AdminAccessLog).where(AdminAccessLog.admin_id.in_(user_ids)))
         await session.execute(delete(WorkerSchedule).where(WorkerSchedule.user_id.in_(user_ids)))
         await session.execute(delete(Absence).where(Absence.user_id.in_(user_ids)))

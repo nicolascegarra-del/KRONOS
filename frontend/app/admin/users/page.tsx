@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, UserX, UserCheck, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Pencil, UserX, UserCheck, CalendarDays } from "lucide-react";
 
 interface User {
   id: string;
@@ -37,14 +37,6 @@ interface UserFormData {
   vacation_days: string;
 }
 
-interface DaySchedule {
-  day_of_week: number;
-  start_time: string | null;
-  end_time: string | null;
-}
-
-const DAY_NAMES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
-
 const emptyForm: UserFormData = {
   email: "",
   full_name: "",
@@ -54,11 +46,6 @@ const emptyForm: UserFormData = {
   dni: "",
   vacation_days: "22",
 };
-
-const CURRENT_YEAR = new Date().getFullYear();
-
-const emptySchedule = (): DaySchedule[] =>
-  Array.from({ length: 7 }, (_, i) => ({ day_of_week: i, start_time: null, end_time: null }));
 
 interface Features { schedule_enabled: boolean; vacation_enabled: boolean; }
 
@@ -73,13 +60,15 @@ export default function UsersPage() {
   const [features, setFeatures] = useState<Features>({ schedule_enabled: true, vacation_enabled: true });
 
   // Schedule dialog
-  const [scheduleUser, setScheduleUser] = useState<User | null>(null);
-  const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [scheduleYear, setScheduleYear] = useState(CURRENT_YEAR);
-  const [schedule, setSchedule] = useState<DaySchedule[]>(emptySchedule());
-  const [scheduleLoading, setScheduleLoading] = useState(false);
-  const [scheduleSaving, setScheduleSaving] = useState(false);
-  const [scheduleSaved, setScheduleSaved] = useState(false);
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  const [selectedScheduleUser, setSelectedScheduleUser] = useState<User | null>(null);
+  const [calYear, setCalYear] = useState(new Date().getFullYear())
+  const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1) // 1-based
+  const [scheduleMap, setScheduleMap] = useState<Map<string, { start_time: string; end_time: string }>>(new Map())
+  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set())
+  const [bulkStart, setBulkStart] = useState("09:00")
+  const [bulkEnd, setBulkEnd] = useState("17:00")
+  const [scheduleLoading, setScheduleLoading] = useState(false)
 
   const fetchUsers = () => {
     setLoading(true);
@@ -116,62 +105,34 @@ export default function UsersPage() {
     setDialogOpen(true);
   };
 
-  const openSchedule = async (u: User) => {
-    setScheduleUser(u);
-    setScheduleOpen(true);
-    setScheduleSaved(false);
-    setScheduleYear(CURRENT_YEAR);
-    await loadScheduleForYear(u.id, CURRENT_YEAR);
-  };
-
-  const loadScheduleForYear = async (userId: string, year: number) => {
-    setScheduleLoading(true);
+  const loadScheduleMonth = async (userId: string, year: number, month: number) => {
+    setScheduleLoading(true)
     try {
-      const res = await api.get<DaySchedule[]>(`/users/${userId}/schedule`, { params: { year } });
-      setSchedule(res.data);
+      const res = await api.get(`/users/${userId}/schedule`, { params: { year, month } })
+      const map = new Map<string, { start_time: string; end_time: string }>()
+      for (const day of res.data) {
+        if (day.start_time && day.end_time) {
+          map.set(day.schedule_date, { start_time: day.start_time.slice(0,5), end_time: day.end_time.slice(0,5) })
+        }
+      }
+      setScheduleMap(map)
+      setSelectedDates(new Set())
+    } catch (e) {
+      console.error(e)
     } finally {
-      setScheduleLoading(false);
+      setScheduleLoading(false)
     }
-  };
+  }
 
-  const changeScheduleYear = async (delta: number) => {
-    if (!scheduleUser) return;
-    const newYear = scheduleYear + delta;
-    setScheduleYear(newYear);
-    await loadScheduleForYear(scheduleUser.id, newYear);
-  };
-
-  const toggleDay = (index: number, active: boolean) => {
-    setSchedule((prev) =>
-      prev.map((d, i) =>
-        i === index
-          ? { ...d, start_time: active ? "09:00" : null, end_time: active ? "17:00" : null }
-          : d
-      )
-    );
-  };
-
-  const updateTime = (index: number, field: "start_time" | "end_time", value: string) => {
-    setSchedule((prev) =>
-      prev.map((d, i) => (i === index ? { ...d, [field]: value || null } : d))
-    );
-  };
-
-  const saveSchedule = async () => {
-    if (!scheduleUser) return;
-    setScheduleSaving(true);
-    try {
-      const res = await api.put<DaySchedule[]>(`/users/${scheduleUser.id}/schedule`, {
-        year: scheduleYear,
-        schedule,
-      });
-      setSchedule(res.data);
-      setScheduleSaved(true);
-      setTimeout(() => setScheduleSaved(false), 3000);
-    } finally {
-      setScheduleSaving(false);
-    }
-  };
+  const openSchedule = (user: User) => {
+    const year = new Date().getFullYear()
+    const month = new Date().getMonth() + 1
+    setSelectedScheduleUser(user)
+    setCalYear(year)
+    setCalMonth(month)
+    loadScheduleMonth(user.id, year, month)
+    setShowScheduleDialog(true)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -406,101 +367,121 @@ export default function UsersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Schedule dialog */}
-      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
-        <DialogContent className="max-w-md">
+      {/* Schedule Dialog */}
+      <Dialog open={showScheduleDialog} onOpenChange={(open) => { if (!open) { setShowScheduleDialog(false); setSelectedScheduleUser(null); setSelectedDates(new Set()); } }}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>
-              Cuadrante — {scheduleUser?.full_name}
-            </DialogTitle>
+            <DialogTitle>Cuadrante — {selectedScheduleUser?.full_name}</DialogTitle>
           </DialogHeader>
 
-          {/* Year navigator */}
-          <div className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
-            <button
-              type="button"
-              onClick={() => changeScheduleYear(-1)}
-              disabled={scheduleLoading}
-              className="p-1 rounded hover:bg-slate-200 disabled:opacity-40"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="text-sm font-semibold text-slate-800">{scheduleYear}</span>
-            <button
-              type="button"
-              onClick={() => changeScheduleYear(1)}
-              disabled={scheduleLoading}
-              className="p-1 rounded hover:bg-slate-200 disabled:opacity-40"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-
           {scheduleLoading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-14 animate-pulse bg-slate-100 rounded-lg" />
-              ))}
-            </div>
+            <div className="flex justify-center py-8"><span className="text-sm text-muted-foreground">Cargando...</span></div>
           ) : (
-            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-              {schedule.map((day, i) => {
-                const active = day.start_time !== null || day.end_time !== null;
-                return (
-                  <div key={day.day_of_week} className="border rounded-lg p-3 space-y-2 bg-white">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{DAY_NAMES[i]}</span>
-                      <button
-                        type="button"
-                        onClick={() => toggleDay(i, !active)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          active ? "bg-primary" : "bg-slate-200"
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                            active ? "translate-x-6" : "translate-x-1"
-                          }`}
-                        />
-                      </button>
-                    </div>
+            <div className="space-y-4">
+              {/* Month navigation */}
+              <div className="flex items-center justify-between">
+                <button
+                  className="p-1 rounded hover:bg-accent"
+                  onClick={() => {
+                    const d = new Date(calYear, calMonth - 2, 1)
+                    const newYear = d.getFullYear(); const newMonth = d.getMonth() + 1
+                    setCalYear(newYear); setCalMonth(newMonth)
+                    if (selectedScheduleUser) loadScheduleMonth(selectedScheduleUser.id, newYear, newMonth)
+                  }}
+                >‹</button>
+                <span className="font-semibold text-sm">
+                  {new Date(calYear, calMonth - 1, 1).toLocaleDateString("es-ES", { month: "long", year: "numeric" })}
+                </span>
+                <button
+                  className="p-1 rounded hover:bg-accent"
+                  onClick={() => {
+                    const d = new Date(calYear, calMonth, 1)
+                    const newYear = d.getFullYear(); const newMonth = d.getMonth() + 1
+                    setCalYear(newYear); setCalMonth(newMonth)
+                    if (selectedScheduleUser) loadScheduleMonth(selectedScheduleUser.id, newYear, newMonth)
+                  }}
+                >›</button>
+              </div>
 
-                    {active && (
-                      <div className="flex gap-3 items-center">
-                        <div className="flex-1 space-y-1">
-                          <Label className="text-xs text-muted-foreground">Entrada</Label>
-                          <Input
-                            type="time"
-                            value={day.start_time ?? ""}
-                            onChange={(e) => updateTime(i, "start_time", e.target.value)}
-                            className="h-8 text-sm"
-                          />
-                        </div>
-                        <div className="flex-1 space-y-1">
-                          <Label className="text-xs text-muted-foreground">Salida</Label>
-                          <Input
-                            type="time"
-                            value={day.end_time ?? ""}
-                            onChange={(e) => updateTime(i, "end_time", e.target.value)}
-                            className="h-8 text-sm"
-                          />
-                        </div>
-                      </div>
-                    )}
+              {/* Calendar grid */}
+              <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-muted-foreground mb-1">
+                {["L","M","X","J","V","S","D"].map(d => <div key={d}>{d}</div>)}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {(() => {
+                  const firstDay = new Date(calYear, calMonth - 1, 1)
+                  const daysInMonth = new Date(calYear, calMonth, 0).getDate()
+                  // Monday=0 offset
+                  const startOffset = (firstDay.getDay() + 6) % 7
+                  const cells: React.ReactNode[] = []
+                  for (let i = 0; i < startOffset; i++) {
+                    cells.push(<div key={`empty-${i}`} />)
+                  }
+                  for (let day = 1; day <= daysInMonth; day++) {
+                    const dateStr = `${calYear}-${String(calMonth).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+                    const hasSchedule = scheduleMap.has(dateStr)
+                    const isSelected = selectedDates.has(dateStr)
+                    const sched = scheduleMap.get(dateStr)
+                    cells.push(
+                      <button
+                        key={dateStr}
+                        onClick={() => {
+                          setSelectedDates(prev => {
+                            const next = new Set(prev)
+                            if (next.has(dateStr)) next.delete(dateStr)
+                            else next.add(dateStr)
+                            return next
+                          })
+                        }}
+                        className={[
+                          "rounded p-1 text-xs min-h-[3rem] flex flex-col items-center justify-start border transition-colors",
+                          isSelected ? "border-primary bg-primary/10" : "border-transparent",
+                          hasSchedule && !isSelected ? "bg-blue-50 text-blue-800" : "",
+                          !hasSchedule && !isSelected ? "hover:bg-accent" : "",
+                        ].join(" ")}
+                      >
+                        <span className="font-medium">{day}</span>
+                        {sched && <span className="text-[10px] leading-tight">{sched.start_time.slice(0,5)}–{sched.end_time.slice(0,5)}</span>}
+                      </button>
+                    )
+                  }
+                  return cells
+                })()}
+              </div>
+
+              {/* Bulk toolbar */}
+              {selectedDates.size > 0 && (
+                <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
+                  <div className="text-sm font-medium">{selectedDates.size} día{selectedDates.size !== 1 ? "s" : ""} seleccionado{selectedDates.size !== 1 ? "s" : ""}</div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="text-xs text-muted-foreground">Entrada</label>
+                    <input type="time" value={bulkStart} onChange={e => setBulkStart(e.target.value)} className="border rounded px-2 py-1 text-sm" />
+                    <label className="text-xs text-muted-foreground">Salida</label>
+                    <input type="time" value={bulkEnd} onChange={e => setBulkEnd(e.target.value)} className="border rounded px-2 py-1 text-sm" />
+                    <Button size="sm" onClick={async () => {
+                      if (!selectedScheduleUser) return
+                      const days = Array.from(selectedDates).map(d => ({ schedule_date: d, start_time: bulkStart + ":00", end_time: bulkEnd + ":00" }))
+                      await api.put(`/users/${selectedScheduleUser.id}/schedule`, { days })
+                      const next = new Map(scheduleMap)
+                      Array.from(selectedDates).forEach(d => next.set(d, { start_time: bulkStart, end_time: bulkEnd }))
+                      setScheduleMap(next)
+                      setSelectedDates(new Set())
+                    }}>Aplicar</Button>
+                    <Button size="sm" variant="outline" onClick={async () => {
+                      if (!selectedScheduleUser) return
+                      const days = Array.from(selectedDates).map(d => ({ schedule_date: d, start_time: null, end_time: null }))
+                      await api.put(`/users/${selectedScheduleUser.id}/schedule`, { days })
+                      const next = new Map(scheduleMap)
+                      Array.from(selectedDates).forEach(d => next.delete(d))
+                      setScheduleMap(next)
+                      setSelectedDates(new Set())
+                    }}>Libre</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setSelectedDates(new Set())}>✕</Button>
                   </div>
-                );
-              })}
+                </div>
+              )}
             </div>
           )}
-
-          <div className="flex gap-3 justify-end pt-2">
-            <Button variant="outline" onClick={() => setScheduleOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={saveSchedule} disabled={scheduleSaving || scheduleLoading}>
-              {scheduleSaving ? "Guardando..." : scheduleSaved ? "¡Guardado!" : "Guardar cuadrante"}
-            </Button>
-          </div>
         </DialogContent>
       </Dialog>
     </div>

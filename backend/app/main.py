@@ -115,26 +115,79 @@ async def _run_column_migrations() -> None:
         await conn.execute(text(
             'ALTER TABLE company ADD COLUMN IF NOT EXISTS vacation_enabled BOOLEAN DEFAULT true'
         ))
+        # (worker_schedule year/day_of_week constraint block removed — columns no longer exist)
+
+    # Soft-delete columns for fichaje — isolated block so a failure here never rolls back other migrations
+    async with engine.begin() as conn:
         await conn.execute(text(
-            'ALTER TABLE worker_schedule ADD COLUMN IF NOT EXISTS year INTEGER DEFAULT 2026'
+            'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false'
         ))
-        # Drop old 2-column unique constraint and replace with 3-column (user+year+day)
+        await conn.execute(text(
+            'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP'
+        ))
+
+    # worker_schedule: migrate from (year, day_of_week) → schedule_date
+    async with engine.begin() as conn:
         try:
             await conn.execute(text(
-                'ALTER TABLE worker_schedule DROP CONSTRAINT IF EXISTS uq_worker_schedule_user_day'
-            ))
-            await conn.execute(text(
-                "DO $$ BEGIN "
-                "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_worker_schedule_user_year_day') THEN "
-                "ALTER TABLE worker_schedule ADD CONSTRAINT uq_worker_schedule_user_year_day "
-                "UNIQUE (user_id, year, day_of_week); END IF; END $$;"
+                "ALTER TABLE worker_schedule ADD COLUMN IF NOT EXISTS schedule_date DATE"
             ))
         except Exception:
-            pass  # SQLite in tests doesn't support this syntax; create_all handles it
+            pass
+        try:
+            await conn.execute(text(
+                "DELETE FROM worker_schedule WHERE schedule_date IS NULL"
+            ))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text(
+                "ALTER TABLE worker_schedule DROP CONSTRAINT IF EXISTS uq_worker_schedule_user_year_day"
+            ))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text(
+                "ALTER TABLE worker_schedule DROP COLUMN IF EXISTS year"
+            ))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text(
+                "ALTER TABLE worker_schedule DROP COLUMN IF EXISTS day_of_week"
+            ))
+        except Exception:
+            pass
+        # Add new unique constraint if not exists
+        try:
+            await conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint WHERE conname = 'uq_worker_schedule_user_date'
+                    ) THEN
+                        ALTER TABLE worker_schedule
+                        ADD CONSTRAINT uq_worker_schedule_user_date
+                        UNIQUE (user_id, schedule_date);
+                    END IF;
+                END $$;
+            """))
+        except Exception:
+            pass
+
+
+_DEFAULT_SECRET = "change-me-in-production-very-secret-key"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Fail fast if production is running with the default insecure secret key
+    if app_settings.APP_ENV == "production" and app_settings.SECRET_KEY == _DEFAULT_SECRET:
+        raise RuntimeError(
+            "FATAL: SECRET_KEY is still the default value. "
+            "Set SECRET_KEY to a strong random string in your production .env file."
+        )
+
     from migrations.seed import seed
     from app.database import init_db
     # register new models so SQLModel.metadata knows about their tables

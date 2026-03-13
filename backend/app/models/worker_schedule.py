@@ -1,8 +1,7 @@
-from uuid import UUID, uuid4
-from datetime import time
+from datetime import date, time
 from typing import Optional, TYPE_CHECKING
-
-from sqlmodel import SQLModel, Field, Relationship, UniqueConstraint
+from uuid import UUID, uuid4
+from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 
 if TYPE_CHECKING:
     from app.models.user import User
@@ -10,13 +9,13 @@ if TYPE_CHECKING:
 
 class WorkerSchedule(SQLModel, table=True):
     __tablename__ = "worker_schedule"
-    __table_args__ = (UniqueConstraint("user_id", "year", "day_of_week", name="uq_worker_schedule_user_year_day"),)
-
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="user.id", index=True)
-    year: int = Field(default=2026)  # calendar year this schedule applies to
-    day_of_week: int  # 0=Lunes, 1=Martes, ..., 6=Domingo
+    schedule_date: date = Field()
     start_time: Optional[time] = None
     end_time: Optional[time] = None
-
     user: Optional["User"] = Relationship(back_populates="schedule")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "schedule_date", name="uq_worker_schedule_user_date"),
+    )

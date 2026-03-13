@@ -35,6 +35,8 @@ class Fichaje(SQLModel, table=True):
     edit_comment: Optional[str] = None
     last_edited_by_id: Optional[UUID] = None
     last_edited_at: Optional[datetime] = None
+    is_deleted: bool = Field(default=False)
+    deleted_at: Optional[datetime] = None
 
     user: Optional["User"] = Relationship(back_populates="fichajes")
     pausas: List["Pausa"] = Relationship(back_populates="fichaje")

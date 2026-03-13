@@ -274,7 +274,7 @@ async def get_my_fichajes(
     result = await session.execute(
         select(Fichaje)
         .options(selectinload(Fichaje.pausas))
-        .where(Fichaje.user_id == current_user.id)
+        .where(Fichaje.user_id == current_user.id, Fichaje.is_deleted == False)
         .order_by(Fichaje.start_time.desc())
     )
     return result.scalars().all()
@@ -299,7 +299,7 @@ async def admin_list_fichajes(
         select(Fichaje)
         .join(User, Fichaje.user_id == User.id)
         .options(selectinload(Fichaje.user), selectinload(Fichaje.pausas))
-        .where(User.company_id == admin.company_id)
+        .where(User.company_id == admin.company_id, Fichaje.is_deleted == False)
         .order_by(Fichaje.start_time.desc())
     )
     if user_id:
@@ -386,18 +386,16 @@ async def admin_delete_fichaje(
     session: AsyncSession = Depends(get_session),
 ):
     result = await session.execute(
-        select(Fichaje)
-        .options(selectinload(Fichaje.pausas))
-        .where(Fichaje.id == fichaje_id)
+        select(Fichaje).where(Fichaje.id == fichaje_id)
     )
     fichaje = result.scalar_one_or_none()
     if not fichaje:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fichaje not found")
 
-    # delete associated edit logs and pausas first (FK constraints)
-    await session.execute(sa_delete(FichajeEditLog).where(FichajeEditLog.fichaje_id == fichaje_id))
-    await session.execute(sa_delete(Pausa).where(Pausa.fichaje_id == fichaje_id))
-    await session.delete(fichaje)
+    # Soft delete — never remove records from the database
+    fichaje.is_deleted = True
+    fichaje.deleted_at = _now()
+    session.add(fichaje)
     await session.commit()
 
 
@@ -413,12 +411,16 @@ async def superadmin_bulk_delete_fichajes(
 ):
     if not body.ids:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="ids list cannot be empty")
-    ids = body.ids
-    await session.execute(sa_delete(FichajeEditLog).where(FichajeEditLog.fichaje_id.in_(ids)))
-    await session.execute(sa_delete(Pausa).where(Pausa.fichaje_id.in_(ids)))
-    await session.execute(sa_delete(Fichaje).where(Fichaje.id.in_(ids)))
+    # Soft delete — never remove records from the database
+    now = _now()
+    from sqlalchemy import update as sa_update
+    await session.execute(
+        sa_update(Fichaje)
+        .where(Fichaje.id.in_(body.ids))
+        .values(is_deleted=True, deleted_at=now)
+    )
     await session.commit()
-    return {"deleted": len(ids)}
+    return {"deleted": len(body.ids)}
 
 
 @router.patch("/admin/{fichaje_id}", response_model=FichajeAdminRead)
@@ -589,6 +591,7 @@ async def superadmin_list_fichajes(
         select(Fichaje)
         .join(User, Fichaje.user_id == User.id)
         .options(selectinload(Fichaje.user), selectinload(Fichaje.pausas))
+        .where(Fichaje.is_deleted == False)
         .order_by(Fichaje.start_time.desc())
     )
     if company_id:
@@ -628,7 +631,7 @@ async def _close_open_fichajes(session: AsyncSession, company_id=None, max_hours
         select(Fichaje)
         .join(User, Fichaje.user_id == User.id)
         .options(selectinload(Fichaje.pausas))
-        .where(Fichaje.status.in_([FichajeStatus.active, FichajeStatus.paused]))
+        .where(Fichaje.status.in_([FichajeStatus.active, FichajeStatus.paused]), Fichaje.is_deleted == False)
     )
     if company_id is not None:
         query = query.where(User.company_id == company_id)

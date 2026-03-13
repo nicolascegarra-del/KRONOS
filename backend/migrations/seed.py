@@ -78,7 +78,7 @@ async def run_migrations() -> None:
 
     # Create new tables (company, etc.) — skips tables that already exist
     async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
+        await conn.run_sync(lambda c: SQLModel.metadata.create_all(c, checkfirst=True))
 
     if is_postgres:
         # Add company_id FK column to user table if missing

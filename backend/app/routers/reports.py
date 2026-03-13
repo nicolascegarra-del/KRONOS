@@ -40,6 +40,7 @@ async def hours_report(
             Fichaje.start_time >= from_dt,
             Fichaje.start_time <= to_dt,
             Fichaje.status == FichajeStatus.finished,
+            Fichaje.is_deleted == False,
             User.company_id == admin.company_id,
         )
     )
@@ -101,6 +102,7 @@ async def fichajes_raw_export(
         .where(
             Fichaje.start_time >= from_dt,
             Fichaje.start_time <= to_dt,
+            Fichaje.is_deleted == False,
             User.company_id == admin.company_id,
         )
         .order_by(User.full_name, Fichaje.start_time)
@@ -196,6 +198,7 @@ async def lateness_alerts(
             Fichaje.start_time >= from_dt,
             Fichaje.start_time <= to_dt,
             Fichaje.late_minutes > 0,
+            Fichaje.is_deleted == False,
             User.company_id == admin.company_id,
         )
         .order_by(Fichaje.start_time.desc())

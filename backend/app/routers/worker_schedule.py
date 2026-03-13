@@ -1,5 +1,11 @@
+from __future__ import annotations
+
+import calendar
 from datetime import date
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,111 +17,140 @@ from app.schemas.worker_schedule import WorkerScheduleDay, WorkerScheduleUpdate
 
 router = APIRouter(tags=["schedule"])
 
-DAYS = list(range(7))  # 0=Lunes ... 6=Domingo
-CURRENT_YEAR = date.today().year
 
-
-def _build_response(rows: list[WorkerSchedule]) -> list[WorkerScheduleDay]:
-    """Return all 7 days for the queried year, filling missing ones with null times."""
-    by_day = {r.day_of_week: r for r in rows}
-    return [
-        WorkerScheduleDay(
-            day_of_week=d,
-            start_time=by_day[d].start_time if d in by_day else None,
-            end_time=by_day[d].end_time if d in by_day else None,
-        )
-        for d in DAYS
-    ]
-
-
-async def _upsert_schedule(
-    session: AsyncSession, user_id, year: int, schedule: list[WorkerScheduleDay]
-):
-    for day_data in schedule:
-        if not (0 <= day_data.day_of_week <= 6):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="day_of_week debe estar entre 0 y 6",
-            )
-        result = await session.execute(
-            select(WorkerSchedule).where(
-                WorkerSchedule.user_id == user_id,
-                WorkerSchedule.year == year,
-                WorkerSchedule.day_of_week == day_data.day_of_week,
-            )
-        )
-        row = result.scalar_one_or_none()
-
-        if day_data.start_time is None and day_data.end_time is None:
-            if row:
-                await session.delete(row)
-        else:
-            if row:
-                row.start_time = day_data.start_time
-                row.end_time = day_data.end_time
-                session.add(row)
-            else:
-                session.add(WorkerSchedule(
-                    user_id=user_id,
-                    year=year,
-                    day_of_week=day_data.day_of_week,
-                    start_time=day_data.start_time,
-                    end_time=day_data.end_time,
-                ))
-
-    await session.commit()
-
-
-# ── Worker: own schedule (view only) ─────────────────────────────────────────
+# ── Worker: read own schedule ──────────────────────────────────────────────────
 
 @router.get("/workers/me/schedule", response_model=list[WorkerScheduleDay])
 async def get_my_schedule(
-    year: int = CURRENT_YEAR,
-    session: AsyncSession = Depends(get_session),
+    year: int = Query(...),
+    month: int = Query(...),
     current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
 ):
+    first_day = date(year, month, 1)
+    last_day = date(year, month, calendar.monthrange(year, month)[1])
     result = await session.execute(
-        select(WorkerSchedule).where(
-            WorkerSchedule.user_id == current_user.id,
-            WorkerSchedule.year == year,
-        )
+        select(WorkerSchedule)
+        .where(WorkerSchedule.user_id == current_user.id)
+        .where(WorkerSchedule.schedule_date >= first_day)
+        .where(WorkerSchedule.schedule_date <= last_day)
     )
-    return _build_response(result.scalars().all())
+    rows = result.scalars().all()
+    return [
+        WorkerScheduleDay(
+            schedule_date=r.schedule_date,
+            start_time=r.start_time,
+            end_time=r.end_time,
+        )
+        for r in rows
+    ]
 
 
-# ── Admin: view/edit any worker schedule ─────────────────────────────────────
+# ── Admin: read worker schedule ────────────────────────────────────────────────
 
 @router.get("/users/{user_id}/schedule", response_model=list[WorkerScheduleDay])
 async def get_worker_schedule(
-    user_id: str,
-    year: int = CURRENT_YEAR,
-    session: AsyncSession = Depends(get_session),
+    user_id: UUID,
+    year: int = Query(...),
+    month: int = Query(...),
     admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
 ):
-    from uuid import UUID
-    result = await session.execute(
-        select(WorkerSchedule).where(
-            WorkerSchedule.user_id == UUID(user_id),
-            WorkerSchedule.year == year,
-        )
-    )
-    return _build_response(result.scalars().all())
+    worker = await session.get(User, user_id)
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found")
+    if admin.role != UserRole.superadmin and worker.company_id != admin.company_id:
+        raise HTTPException(status_code=403, detail="Access denied")
 
+    first_day = date(year, month, 1)
+    last_day = date(year, month, calendar.monthrange(year, month)[1])
+    result = await session.execute(
+        select(WorkerSchedule)
+        .where(WorkerSchedule.user_id == user_id)
+        .where(WorkerSchedule.schedule_date >= first_day)
+        .where(WorkerSchedule.schedule_date <= last_day)
+    )
+    rows = result.scalars().all()
+    return [
+        WorkerScheduleDay(
+            schedule_date=r.schedule_date,
+            start_time=r.start_time,
+            end_time=r.end_time,
+        )
+        for r in rows
+    ]
+
+
+# ── Admin: upsert schedule days ────────────────────────────────────────────────
 
 @router.put("/users/{user_id}/schedule", response_model=list[WorkerScheduleDay])
-async def update_worker_schedule(
-    user_id: str,
-    body: WorkerScheduleUpdate,
-    session: AsyncSession = Depends(get_session),
+async def upsert_worker_schedule(
+    user_id: UUID,
+    payload: WorkerScheduleUpdate,
     admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
 ):
-    from uuid import UUID
-    uid = UUID(user_id)
-    await _upsert_schedule(session, uid, body.year, body.schedule)
-    result = await session.execute(
-        select(WorkerSchedule).where(
-            WorkerSchedule.user_id == uid,
-            WorkerSchedule.year == body.year,
+    worker = await session.get(User, user_id)
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found")
+    if admin.role != UserRole.superadmin and worker.company_id != admin.company_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    saved: list[WorkerScheduleDay] = []
+
+    for day in payload.days:
+        # Find existing row
+        result = await session.execute(
+            select(WorkerSchedule)
+            .where(WorkerSchedule.user_id == user_id)
+            .where(WorkerSchedule.schedule_date == day.schedule_date)
         )
+        existing = result.scalars().first()
+
+        if day.start_time is None and day.end_time is None:
+            # Delete if exists
+            if existing:
+                await session.delete(existing)
+        else:
+            if existing:
+                existing.start_time = day.start_time
+                existing.end_time = day.end_time
+                session.add(existing)
+            else:
+                new_row = WorkerSchedule(
+                    user_id=user_id,
+                    schedule_date=day.schedule_date,
+                    start_time=day.start_time,
+                    end_time=day.end_time,
+                )
+                session.add(new_row)
+            saved.append(day)
+
+    await session.commit()
+    return saved
+
+
+# ── Admin: delete a single day ─────────────────────────────────────────────────
+
+@router.delete("/users/{user_id}/schedule/date/{schedule_date}", status_code=204)
+async def delete_schedule_day(
+    user_id: UUID,
+    schedule_date: date,
+    admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    worker = await session.get(User, user_id)
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found")
+    if admin.role != UserRole.superadmin and worker.company_id != admin.company_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    result = await session.execute(
+        select(WorkerSchedule)
+        .where(WorkerSchedule.user_id == user_id)
+        .where(WorkerSchedule.schedule_date == schedule_date)
     )
-    return _build_response(result.scalars().all())
+    row = result.scalars().first()
+    if row:
+        await session.delete(row)
+        await session.commit()

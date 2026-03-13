@@ -1,17 +1,13 @@
 from datetime import date, time
 from typing import Optional
-
 from pydantic import BaseModel
 
 
 class WorkerScheduleDay(BaseModel):
-    day_of_week: int  # 0=Lunes, ..., 6=Domingo
+    schedule_date: date
     start_time: Optional[time] = None
     end_time: Optional[time] = None
 
-    model_config = {"from_attributes": True}
-
 
 class WorkerScheduleUpdate(BaseModel):
-    year: int
-    schedule: list[WorkerScheduleDay]
+    days: list[WorkerScheduleDay]
