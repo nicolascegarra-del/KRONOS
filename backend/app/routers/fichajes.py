@@ -4,6 +4,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import delete as sa_delete, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -398,6 +399,26 @@ async def admin_delete_fichaje(
     await session.execute(sa_delete(Pausa).where(Pausa.fichaje_id == fichaje_id))
     await session.delete(fichaje)
     await session.commit()
+
+
+class BulkFichajeDelete(BaseModel):
+    ids: list[UUID]
+
+
+@router.delete("/superadmin/bulk", status_code=status.HTTP_200_OK)
+async def superadmin_bulk_delete_fichajes(
+    body: BulkFichajeDelete,
+    _superadmin: User = Depends(require_superadmin),
+    session: AsyncSession = Depends(get_session),
+):
+    if not body.ids:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="ids list cannot be empty")
+    ids = body.ids
+    await session.execute(sa_delete(FichajeEditLog).where(FichajeEditLog.fichaje_id.in_(ids)))
+    await session.execute(sa_delete(Pausa).where(Pausa.fichaje_id.in_(ids)))
+    await session.execute(sa_delete(Fichaje).where(Fichaje.id.in_(ids)))
+    await session.commit()
+    return {"deleted": len(ids)}
 
 
 @router.patch("/admin/{fichaje_id}", response_model=FichajeAdminRead)

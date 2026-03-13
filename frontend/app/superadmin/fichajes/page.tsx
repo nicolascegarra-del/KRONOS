@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Search, Trash2, MessageSquare, MapPin } from "lucide-react";
+import { Search, Trash2, MessageSquare } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { format } from "date-fns";
 import { minutesToHoursLabel } from "@/lib/utils";
@@ -46,6 +46,8 @@ export default function SuperadminFichajesPage() {
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const [companyFilter, setCompanyFilter] = useState("");
   const [fromDate, setFromDate] = useState("");
@@ -60,6 +62,7 @@ export default function SuperadminFichajesPage() {
   const fetchFichajes = async () => {
     setLoading(true);
     setError(null);
+    setSelected(new Set());
     try {
       const params = new URLSearchParams();
       if (companyFilter) params.set("company_id", companyFilter);
@@ -80,8 +83,38 @@ export default function SuperadminFichajesPage() {
     try {
       await api.delete(`/fichajes/admin/${id}`);
       setFichajes((prev) => prev.filter((f) => f.id !== id));
+      setSelected((prev) => { const s = new Set(prev); s.delete(id); return s; });
     } catch (e: any) {
       setError(e.response?.data?.detail || "Error al eliminar el fichaje");
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const s = new Set(prev);
+      s.has(id) ? s.delete(id) : s.add(id);
+      return s;
+    });
+  };
+
+  const allSelected = fichajes.length > 0 && selected.size === fichajes.length;
+  const toggleSelectAll = () => {
+    setSelected(allSelected ? new Set() : new Set(fichajes.map((f) => f.id)));
+  };
+
+  const handleBulkDelete = async () => {
+    if (selected.size === 0) return;
+    if (!confirm(`¿Eliminar ${selected.size} fichaje${selected.size > 1 ? "s" : ""}? Esta acción no se puede deshacer.`)) return;
+    setBulkDeleting(true);
+    setError(null);
+    try {
+      await api.delete("/fichajes/superadmin/bulk", { data: { ids: Array.from(selected) } });
+      setFichajes((prev) => prev.filter((f) => !selected.has(f.id)));
+      setSelected(new Set());
+    } catch (e: any) {
+      setError(e.response?.data?.detail || "Error al eliminar los fichajes");
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -107,19 +140,11 @@ export default function SuperadminFichajesPage() {
           </div>
           <div className="space-y-1">
             <Label>Desde</Label>
-            <Input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-            />
+            <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
           </div>
           <div className="space-y-1">
             <Label>Hasta</Label>
-            <Input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-            />
+            <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
           </div>
           <div className="space-y-1">
             <Label>Estado</Label>
@@ -143,12 +168,44 @@ export default function SuperadminFichajesPage() {
 
       {error && <p className="text-destructive text-sm mb-4">{error}</p>}
 
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 mb-4 p-3 bg-slate-100 border rounded-lg">
+          <span className="text-sm font-medium">{selected.size} seleccionado{selected.size > 1 ? "s" : ""}</span>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={handleBulkDelete}
+            disabled={bulkDeleting}
+            className="flex items-center gap-1"
+          >
+            <Trash2 className="w-3 h-3" />
+            {bulkDeleting ? "Eliminando..." : "Eliminar seleccionados"}
+          </Button>
+          <button
+            onClick={() => setSelected(new Set())}
+            className="text-sm text-muted-foreground hover:text-foreground ml-auto"
+          >
+            Cancelar selección
+          </button>
+        </div>
+      )}
+
       {/* Table */}
       <div className="bg-white rounded-lg border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b">
               <tr>
+                <th className="p-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleSelectAll}
+                    className="rounded border-gray-300"
+                    title="Seleccionar todos"
+                  />
+                </th>
                 <th className="text-left p-3 font-medium">Trabajador</th>
                 <th className="text-left p-3 font-medium">Inicio</th>
                 <th className="text-left p-3 font-medium">Fin</th>
@@ -163,13 +220,24 @@ export default function SuperadminFichajesPage() {
             <tbody>
               {fichajes.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-6 text-center text-muted-foreground">
+                  <td colSpan={10} className="p-6 text-center text-muted-foreground">
                     {loading ? "Cargando..." : "Sin fichajes para los filtros seleccionados"}
                   </td>
                 </tr>
               ) : (
                 fichajes.map((f) => (
-                  <tr key={f.id} className="border-b last:border-0 hover:bg-slate-50 align-top">
+                  <tr
+                    key={f.id}
+                    className={`border-b last:border-0 hover:bg-slate-50 align-top ${selected.has(f.id) ? "bg-blue-50" : ""}`}
+                  >
+                    <td className="p-3">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(f.id)}
+                        onChange={() => toggleSelect(f.id)}
+                        className="rounded border-gray-300"
+                      />
+                    </td>
                     <td className="p-3">
                       {f.user ? (
                         <>
