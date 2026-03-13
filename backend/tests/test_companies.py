@@ -87,15 +87,16 @@ async def test_update_company(
 
 
 @pytest.mark.asyncio
-async def test_delete_company_with_users_fails(
+async def test_delete_company_with_users_cascade(
     client: AsyncClient, superadmin_user: User, company: Company, admin_user: User
 ):
+    """Deleting a company cascade-deletes all its users and related data."""
     token = await get_token(client, "superadmin@test.com", "Super1234!")
     resp = await client.delete(
         f"/companies/{company.id}",
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert resp.status_code == 409
+    assert resp.status_code == 204
 
 
 @pytest.mark.asyncio

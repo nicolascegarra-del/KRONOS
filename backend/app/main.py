@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import auth, users, fichajes, reports, pause_types, notifications, companies, worker_schedule, work_centers, superadmin_users, invoice_config, worker_export, access_logs
+from app.routers import auth, users, fichajes, reports, pause_types, notifications, companies, worker_schedule, work_centers, superadmin_users, invoice_config, worker_export, access_logs, absence
 from app.routers import settings as settings_router
 
 app_settings = get_settings()
@@ -106,6 +106,31 @@ async def _run_column_migrations() -> None:
         await conn.execute(text(
             'ALTER TABLE company ADD COLUMN IF NOT EXISTS logo_url TEXT'
         ))
+        await conn.execute(text(
+            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS vacation_days INTEGER DEFAULT 22'
+        ))
+        await conn.execute(text(
+            'ALTER TABLE company ADD COLUMN IF NOT EXISTS schedule_enabled BOOLEAN DEFAULT true'
+        ))
+        await conn.execute(text(
+            'ALTER TABLE company ADD COLUMN IF NOT EXISTS vacation_enabled BOOLEAN DEFAULT true'
+        ))
+        await conn.execute(text(
+            'ALTER TABLE worker_schedule ADD COLUMN IF NOT EXISTS year INTEGER DEFAULT 2026'
+        ))
+        # Drop old 2-column unique constraint and replace with 3-column (user+year+day)
+        try:
+            await conn.execute(text(
+                'ALTER TABLE worker_schedule DROP CONSTRAINT IF EXISTS uq_worker_schedule_user_day'
+            ))
+            await conn.execute(text(
+                "DO $$ BEGIN "
+                "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_worker_schedule_user_year_day') THEN "
+                "ALTER TABLE worker_schedule ADD CONSTRAINT uq_worker_schedule_user_year_day "
+                "UNIQUE (user_id, year, day_of_week); END IF; END $$;"
+            ))
+        except Exception:
+            pass  # SQLite in tests doesn't support this syntax; create_all handles it
 
 
 @asynccontextmanager
@@ -115,6 +140,7 @@ async def lifespan(app: FastAPI):
     # register new models so SQLModel.metadata knows about their tables
     import app.models.fichajeeditlog  # noqa: F401
     import app.models.adminaccesslog  # noqa: F401
+    import app.models.absence  # noqa: F401
     await init_db()
     await _run_column_migrations()
     await seed()
@@ -155,6 +181,7 @@ app.include_router(superadmin_users.router)
 app.include_router(invoice_config.router)
 app.include_router(worker_export.router)
 app.include_router(access_logs.router)
+app.include_router(absence.router)
 
 
 @app.get("/health")

@@ -18,6 +18,8 @@ class CompanyUpdate(BaseModel):
     name: Optional[str] = None
     max_workers: Optional[int] = None
     geo_enabled: Optional[bool] = None
+    schedule_enabled: Optional[bool] = None
+    vacation_enabled: Optional[bool] = None
     # Billing
     nif: Optional[str] = None
     address: Optional[str] = None
@@ -38,6 +40,8 @@ class CompanyRead(BaseModel):
     name: str
     max_workers: int
     geo_enabled: bool
+    schedule_enabled: bool = True
+    vacation_enabled: bool = True
     worker_count: int
     created_at: datetime
     logo_url: Optional[str] = None

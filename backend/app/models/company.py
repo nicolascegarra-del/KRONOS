@@ -16,6 +16,8 @@ class Company(SQLModel, table=True):
     name: str = Field(unique=True, index=True)
     max_workers: int = Field(default=10)
     geo_enabled: bool = Field(default=True)
+    schedule_enabled: bool = Field(default=True)   # show shift schedule (cuadrante) feature
+    vacation_enabled: bool = Field(default=True)   # show vacation/absence management feature
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     # Billing / fiscal data

@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, UserX, UserCheck } from "lucide-react";
+import { Plus, Pencil, UserX, UserCheck, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface User {
   id: string;
@@ -24,6 +24,7 @@ interface User {
   scheduled_start?: string;
   scheduled_end?: string;
   dni?: string;
+  vacation_days?: number;
 }
 
 interface UserFormData {
@@ -33,7 +34,16 @@ interface UserFormData {
   scheduled_start: string;
   scheduled_end: string;
   dni: string;
+  vacation_days: string;
 }
+
+interface DaySchedule {
+  day_of_week: number;
+  start_time: string | null;
+  end_time: string | null;
+}
+
+const DAY_NAMES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
 const emptyForm: UserFormData = {
   email: "",
@@ -42,7 +52,15 @@ const emptyForm: UserFormData = {
   scheduled_start: "",
   scheduled_end: "",
   dni: "",
+  vacation_days: "22",
 };
+
+const CURRENT_YEAR = new Date().getFullYear();
+
+const emptySchedule = (): DaySchedule[] =>
+  Array.from({ length: 7 }, (_, i) => ({ day_of_week: i, start_time: null, end_time: null }));
+
+interface Features { schedule_enabled: boolean; vacation_enabled: boolean; }
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -52,6 +70,16 @@ export default function UsersPage() {
   const [form, setForm] = useState<UserFormData>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [features, setFeatures] = useState<Features>({ schedule_enabled: true, vacation_enabled: true });
+
+  // Schedule dialog
+  const [scheduleUser, setScheduleUser] = useState<User | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleYear, setScheduleYear] = useState(CURRENT_YEAR);
+  const [schedule, setSchedule] = useState<DaySchedule[]>(emptySchedule());
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [scheduleSaved, setScheduleSaved] = useState(false);
 
   const fetchUsers = () => {
     setLoading(true);
@@ -63,6 +91,7 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
+    api.get<Features>("/companies/features").then((r) => setFeatures(r.data)).catch(() => {});
   }, []);
 
   const openCreate = () => {
@@ -81,9 +110,67 @@ export default function UsersPage() {
       scheduled_start: u.scheduled_start || "",
       scheduled_end: u.scheduled_end || "",
       dni: u.dni || "",
+      vacation_days: String(u.vacation_days ?? 22),
     });
     setError(null);
     setDialogOpen(true);
+  };
+
+  const openSchedule = async (u: User) => {
+    setScheduleUser(u);
+    setScheduleOpen(true);
+    setScheduleSaved(false);
+    setScheduleYear(CURRENT_YEAR);
+    await loadScheduleForYear(u.id, CURRENT_YEAR);
+  };
+
+  const loadScheduleForYear = async (userId: string, year: number) => {
+    setScheduleLoading(true);
+    try {
+      const res = await api.get<DaySchedule[]>(`/users/${userId}/schedule`, { params: { year } });
+      setSchedule(res.data);
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  const changeScheduleYear = async (delta: number) => {
+    if (!scheduleUser) return;
+    const newYear = scheduleYear + delta;
+    setScheduleYear(newYear);
+    await loadScheduleForYear(scheduleUser.id, newYear);
+  };
+
+  const toggleDay = (index: number, active: boolean) => {
+    setSchedule((prev) =>
+      prev.map((d, i) =>
+        i === index
+          ? { ...d, start_time: active ? "09:00" : null, end_time: active ? "17:00" : null }
+          : d
+      )
+    );
+  };
+
+  const updateTime = (index: number, field: "start_time" | "end_time", value: string) => {
+    setSchedule((prev) =>
+      prev.map((d, i) => (i === index ? { ...d, [field]: value || null } : d))
+    );
+  };
+
+  const saveSchedule = async () => {
+    if (!scheduleUser) return;
+    setScheduleSaving(true);
+    try {
+      const res = await api.put<DaySchedule[]>(`/users/${scheduleUser.id}/schedule`, {
+        year: scheduleYear,
+        schedule,
+      });
+      setSchedule(res.data);
+      setScheduleSaved(true);
+      setTimeout(() => setScheduleSaved(false), 3000);
+    } finally {
+      setScheduleSaving(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -98,6 +185,7 @@ export default function UsersPage() {
           scheduled_start: form.scheduled_start || null,
           scheduled_end: form.scheduled_end || null,
           dni: form.dni || null,
+          vacation_days: form.vacation_days ? parseInt(form.vacation_days) : 22,
         });
       } else {
         await api.post("/users", {
@@ -107,6 +195,7 @@ export default function UsersPage() {
           scheduled_start: form.scheduled_start || null,
           scheduled_end: form.scheduled_end || null,
           dni: form.dni || null,
+          vacation_days: form.vacation_days ? parseInt(form.vacation_days) : 22,
         });
       }
       setDialogOpen(false);
@@ -162,7 +251,7 @@ export default function UsersPage() {
                     <td className="p-3"><div className="h-5 w-14 animate-pulse bg-slate-200 rounded-full" /></td>
                     <td className="p-3"><div className="h-4 w-20 animate-pulse bg-slate-200 rounded" /></td>
                     <td className="p-3"><div className="h-5 w-14 animate-pulse bg-slate-200 rounded-full" /></td>
-                    <td className="p-3 text-right"><div className="h-8 w-16 animate-pulse bg-slate-200 rounded ml-auto" /></td>
+                    <td className="p-3 text-right"><div className="h-8 w-24 animate-pulse bg-slate-200 rounded ml-auto" /></td>
                   </tr>
                 ))
               ) : (
@@ -188,6 +277,17 @@ export default function UsersPage() {
                     </td>
                     <td className="p-3 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {features.schedule_enabled && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => openSchedule(u)}
+                            aria-label="Cuadrante anual"
+                            title="Cuadrante anual"
+                          >
+                            <CalendarDays className="w-4 h-4 text-blue-600" aria-hidden="true" />
+                          </Button>
+                        )}
                         <Button size="icon" variant="ghost" onClick={() => openEdit(u)} aria-label="Editar trabajador">
                           <Pencil className="w-4 h-4" aria-hidden="true" />
                         </Button>
@@ -208,6 +308,7 @@ export default function UsersPage() {
         </div>
       </div>
 
+      {/* Edit / Create user dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -250,13 +351,26 @@ export default function UsersPage() {
               </>
             )}
 
-            <div className="space-y-2">
-              <Label>DNI / NIF</Label>
-              <Input
-                value={form.dni}
-                onChange={(e) => setForm({ ...form, dni: e.target.value })}
-                placeholder="12345678A"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>DNI / NIF</Label>
+                <Input
+                  value={form.dni}
+                  onChange={(e) => setForm({ ...form, dni: e.target.value })}
+                  placeholder="12345678A"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Días de vacaciones / año</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="365"
+                  value={form.vacation_days}
+                  onChange={(e) => setForm({ ...form, vacation_days: e.target.value })}
+                  placeholder="22"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -289,6 +403,104 @@ export default function UsersPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule dialog */}
+      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Cuadrante — {scheduleUser?.full_name}
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Year navigator */}
+          <div className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+            <button
+              type="button"
+              onClick={() => changeScheduleYear(-1)}
+              disabled={scheduleLoading}
+              className="p-1 rounded hover:bg-slate-200 disabled:opacity-40"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm font-semibold text-slate-800">{scheduleYear}</span>
+            <button
+              type="button"
+              onClick={() => changeScheduleYear(1)}
+              disabled={scheduleLoading}
+              className="p-1 rounded hover:bg-slate-200 disabled:opacity-40"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {scheduleLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-14 animate-pulse bg-slate-100 rounded-lg" />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+              {schedule.map((day, i) => {
+                const active = day.start_time !== null || day.end_time !== null;
+                return (
+                  <div key={day.day_of_week} className="border rounded-lg p-3 space-y-2 bg-white">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">{DAY_NAMES[i]}</span>
+                      <button
+                        type="button"
+                        onClick={() => toggleDay(i, !active)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          active ? "bg-primary" : "bg-slate-200"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                            active ? "translate-x-6" : "translate-x-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {active && (
+                      <div className="flex gap-3 items-center">
+                        <div className="flex-1 space-y-1">
+                          <Label className="text-xs text-muted-foreground">Entrada</Label>
+                          <Input
+                            type="time"
+                            value={day.start_time ?? ""}
+                            onChange={(e) => updateTime(i, "start_time", e.target.value)}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        <div className="flex-1 space-y-1">
+                          <Label className="text-xs text-muted-foreground">Salida</Label>
+                          <Input
+                            type="time"
+                            value={day.end_time ?? ""}
+                            onChange={(e) => updateTime(i, "end_time", e.target.value)}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex gap-3 justify-end pt-2">
+            <Button variant="outline" onClick={() => setScheduleOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={saveSchedule} disabled={scheduleSaving || scheduleLoading}>
+              {scheduleSaving ? "Guardando..." : scheduleSaved ? "¡Guardado!" : "Guardar cuadrante"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

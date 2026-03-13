@@ -32,6 +32,8 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     company_id: Optional[UUID] = Field(default=None, foreign_key="company.id", index=True)
 
+    vacation_days: int = Field(default=22)  # total vacation days allocated per year
+
     dni: Optional[str] = Field(default=None)
     geo_consent: Optional[bool] = Field(default=None)
     geo_consent_date: Optional[datetime] = Field(default=None)

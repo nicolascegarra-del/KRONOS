@@ -11,6 +11,7 @@ from app.models.adminaccesslog import AdminAccessLog
 from app.models.company import Company
 from app.models.fichaje import Fichaje
 from app.models.fichajeeditlog import FichajeEditLog
+from app.models.absence import Absence
 from app.models.pausa import Pausa
 from app.models.user import User, UserRole
 from app.models.worker_schedule import WorkerSchedule
@@ -37,6 +38,8 @@ def _to_read(c: Company, worker_count: int) -> CompanyRead:
         name=c.name,
         max_workers=c.max_workers,
         geo_enabled=c.geo_enabled,
+        schedule_enabled=c.schedule_enabled if c.schedule_enabled is not None else True,
+        vacation_enabled=c.vacation_enabled if c.vacation_enabled is not None else True,
         worker_count=worker_count,
         created_at=c.created_at,
         logo_url=c.logo_url,
@@ -67,6 +70,25 @@ async def get_my_company(
     if not company:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
     return company
+
+
+@router.get("/features")
+async def get_company_features(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Return feature flags for the current user's company (usable by admin and worker)."""
+    if not user.company_id:
+        # Superadmin has no company — all features enabled
+        return {"schedule_enabled": True, "vacation_enabled": True}
+    result = await session.execute(select(Company).where(Company.id == user.company_id))
+    company = result.scalar_one_or_none()
+    if not company:
+        return {"schedule_enabled": True, "vacation_enabled": True}
+    return {
+        "schedule_enabled": company.schedule_enabled if company.schedule_enabled is not None else True,
+        "vacation_enabled": company.vacation_enabled if company.vacation_enabled is not None else True,
+    }
 
 
 @router.post("/{company_id}/logo", response_model=CompanyRead)
@@ -248,6 +270,8 @@ async def delete_company(
         await session.execute(delete(FichajeEditLog).where(FichajeEditLog.edited_by_id.in_(user_ids)))
         await session.execute(delete(AdminAccessLog).where(AdminAccessLog.admin_id.in_(user_ids)))
         await session.execute(delete(WorkerSchedule).where(WorkerSchedule.user_id.in_(user_ids)))
+        await session.execute(delete(Absence).where(Absence.user_id.in_(user_ids)))
+        await session.execute(delete(Absence).where(Absence.reviewed_by_id.in_(user_ids)))
         await session.execute(delete(User).where(User.id.in_(user_ids)))
 
     await session.delete(company)

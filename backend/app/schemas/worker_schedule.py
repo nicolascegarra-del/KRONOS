@@ -1,5 +1,4 @@
-from uuid import UUID
-from datetime import time
+from datetime import date, time
 from typing import Optional
 
 from pydantic import BaseModel
@@ -14,4 +13,5 @@ class WorkerScheduleDay(BaseModel):
 
 
 class WorkerScheduleUpdate(BaseModel):
+    year: int
     schedule: list[WorkerScheduleDay]

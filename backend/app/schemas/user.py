@@ -23,6 +23,7 @@ class UserUpdate(BaseModel):
     scheduled_end: Optional[time] = None
     is_active: Optional[bool] = None
     dni: Optional[str] = None
+    vacation_days: Optional[int] = None
 
 
 class SuperadminUserCreate(BaseModel):
@@ -61,5 +62,6 @@ class UserRead(BaseModel):
     company_name: Optional[str] = None
     dni: Optional[str] = None
     geo_consent: Optional[bool] = None
+    vacation_days: int = 22
 
     model_config = {"from_attributes": True}

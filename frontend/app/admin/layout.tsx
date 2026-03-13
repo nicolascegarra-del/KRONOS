@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
@@ -15,22 +15,24 @@ import {
   X,
   MapPin,
   MoreHorizontal,
+  CalendarRange,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import NotificationBell from "@/components/NotificationBell";
+import { api } from "@/lib/api";
 
-const navItems = [
-  { href: "/admin/dashboard", label: "Panel", icon: LayoutDashboard },
-  { href: "/admin/users", label: "Trabajadores", icon: Users },
-  { href: "/admin/fichajes", label: "Fichajes", icon: Clock },
-  { href: "/admin/reports", label: "Informes", icon: BarChart2 },
-  { href: "/admin/work-centers", label: "Centros trabajo", icon: MapPin },
-  { href: "/admin/pause-types", label: "Tipos pausa", icon: Tag },
-  { href: "/admin/settings", label: "Configuración", icon: Settings },
-];
+interface Features { schedule_enabled: boolean; vacation_enabled: boolean; }
 
-const bottomNavItems = navItems.slice(0, 4);
-const moreNavItems = navItems.slice(4);
+const BASE_NAV = [
+  { href: "/admin/dashboard", label: "Panel", icon: LayoutDashboard, feature: null },
+  { href: "/admin/users", label: "Trabajadores", icon: Users, feature: null },
+  { href: "/admin/fichajes", label: "Fichajes", icon: Clock, feature: null },
+  { href: "/admin/reports", label: "Informes", icon: BarChart2, feature: null },
+  { href: "/admin/absences", label: "Ausencias", icon: CalendarRange, feature: "vacation_enabled" },
+  { href: "/admin/work-centers", label: "Centros trabajo", icon: MapPin, feature: null },
+  { href: "/admin/pause-types", label: "Tipos pausa", icon: Tag, feature: null },
+  { href: "/admin/settings", label: "Configuración", icon: Settings, feature: null },
+] as const;
 
 export default function AdminLayout({
   children,
@@ -42,6 +44,17 @@ export default function AdminLayout({
   const { user, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [features, setFeatures] = useState<Features>({ schedule_enabled: true, vacation_enabled: true });
+
+  useEffect(() => {
+    api.get<Features>("/companies/features").then((r) => setFeatures(r.data)).catch(() => {});
+  }, []);
+
+  const navItems = BASE_NAV.filter(
+    (item) => item.feature === null || features[item.feature as keyof Features]
+  );
+  const bottomNavItems = navItems.slice(0, 4);
+  const moreNavItems = navItems.slice(4);
 
   const handleLogout = async () => {
     await logout();

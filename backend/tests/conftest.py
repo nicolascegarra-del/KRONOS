@@ -15,6 +15,7 @@ from app.models.company import Company
 from app.models.user import User, UserRole
 from app.models.fichajeeditlog import FichajeEditLog  # noqa: F401 — registers table in SQLModel.metadata
 from app.models.adminaccesslog import AdminAccessLog  # noqa: F401 — registers table in SQLModel.metadata
+from app.models.absence import Absence  # noqa: F401 — registers table in SQLModel.metadata
 from app.services.auth import hash_password
 
 # Use SQLite in-memory for tests

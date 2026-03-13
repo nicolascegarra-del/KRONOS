@@ -1,18 +1,21 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
-import { LayoutDashboard, Clock, UserCircle, LogOut, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Clock, UserCircle, LogOut, ShieldCheck, CalendarRange } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 
-const navItems = [
-  { href: "/worker/dashboard", label: "Inicio", icon: LayoutDashboard },
-  { href: "/worker/history", label: "Historial", icon: Clock },
-  { href: "/worker/profile", label: "Perfil", icon: UserCircle },
-];
+interface Features { schedule_enabled: boolean; vacation_enabled: boolean; }
+
+const BASE_NAV = [
+  { href: "/worker/dashboard", label: "Inicio", icon: LayoutDashboard, feature: null },
+  { href: "/worker/history", label: "Historial", icon: Clock, feature: null },
+  { href: "/worker/absences", label: "Ausencias", icon: CalendarRange, feature: "vacation_enabled" },
+  { href: "/worker/profile", label: "Perfil", icon: UserCircle, feature: null },
+] as const;
 
 export default function WorkerLayout({
   children,
@@ -23,6 +26,15 @@ export default function WorkerLayout({
   const router = useRouter();
   const { user, logout, setUser } = useAuthStore();
   const [acceptingNotice, setAcceptingNotice] = useState(false);
+  const [features, setFeatures] = useState<Features>({ schedule_enabled: true, vacation_enabled: true });
+
+  useEffect(() => {
+    api.get<Features>("/companies/features").then((r) => setFeatures(r.data)).catch(() => {});
+  }, []);
+
+  const navItems = BASE_NAV.filter(
+    (item) => item.feature === null || features[item.feature as keyof Features]
+  );
 
   const handleAcceptNotice = async () => {
     setAcceptingNotice(true);
