@@ -1,4 +1,3 @@
-import asyncio
 import csv
 import io
 from datetime import date, datetime, timezone
@@ -76,7 +75,7 @@ async def hours_report(
 
     import json
     details = json.dumps({"from_date": from_date.isoformat(), "to_date": to_date.isoformat()})
-    asyncio.create_task(log_admin_access(admin.id, "EXPORT_REPORT", details))
+    await log_admin_access(admin.id, "EXPORT_REPORT", details)
     return HoursReport(
         from_date=from_date,
         to_date=to_date,

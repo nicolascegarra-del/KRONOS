@@ -318,7 +318,7 @@ async def admin_list_fichajes(
         "from_date": from_date.isoformat() if from_date else None,
         "to_date": to_date.isoformat() if to_date else None,
     })
-    asyncio.create_task(log_admin_access(admin.id, "VIEW_FICHAJES", details))
+    await log_admin_access(admin.id, "VIEW_FICHAJES", details)
     return rows
 
 
