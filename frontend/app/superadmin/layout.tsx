@@ -52,7 +52,6 @@ export default function SuperAdminLayout({
           <div className="flex items-start justify-between">
             <div className="flex-1 flex flex-col items-center gap-1">
               <img src="/logo_kronos.png" alt="Kronos" className="h-14 w-auto max-w-[200px] object-contain" />
-              <span className="text-[9px] text-slate-500 font-semibold uppercase tracking-widest">Powered by Klyp</span>
             </div>
             <button className="md:hidden mt-1 shrink-0" onClick={() => setSidebarOpen(false)} aria-label="Cerrar menú">
               <X className="w-5 h-5" />

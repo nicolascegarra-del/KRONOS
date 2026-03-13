@@ -78,7 +78,6 @@ export default function AdminLayout({
             {/* Kronos logo — centered, bigger */}
             <div className="flex-1 flex flex-col items-center gap-1">
               <img src="/logo_kronos.png" alt="Kronos" className="h-14 w-auto max-w-[200px] object-contain" />
-              <span className="text-[9px] text-slate-500 font-semibold uppercase tracking-widest">Powered by Klyp</span>
             </div>
             <button className="md:hidden mt-1 shrink-0" onClick={() => setSidebarOpen(false)}>
               <X className="w-5 h-5" />
@@ -88,7 +87,6 @@ export default function AdminLayout({
           {companyLogo && (
             <div className="mt-3 pt-3 border-t border-slate-700 flex flex-col items-center gap-1">
               <img src={companyLogo} alt={companyName ?? "Logo empresa"} className="h-9 w-auto max-w-[160px] object-contain" />
-              {companyName && <span className="text-[10px] text-slate-400 font-medium truncate max-w-[150px]">{companyName}</span>}
             </div>
           )}
         </div>

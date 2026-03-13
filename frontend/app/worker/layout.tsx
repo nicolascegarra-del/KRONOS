@@ -93,7 +93,6 @@ export default function WorkerLayout({
         {/* Branding: Kronos centered + company logo below */}
         <div className="flex-1 flex flex-col items-center gap-0.5">
           <img src="/logo_kronos.png" alt="Kronos" className="h-10 w-auto max-w-[160px] object-contain" />
-          <span className="text-[8px] text-slate-500 font-semibold uppercase tracking-widest leading-none">Powered by Klyp</span>
           {companyLogo && (
             <div className="mt-1.5 pt-1.5 border-t border-slate-700 w-full flex flex-col items-center gap-0.5">
               <img src={companyLogo} alt={companyName ?? "Logo empresa"} className="h-7 w-auto max-w-[120px] object-contain" />
