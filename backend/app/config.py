@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     # App
     APP_ENV: str = "development"
+    APP_URL: str = "http://localhost:3000"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

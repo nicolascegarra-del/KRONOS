@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import Link from "next/link";
 import { Smartphone, ChevronDown, ChevronUp, ShieldCheck, AlertCircle, UserX, Lock } from "lucide-react";
 
 function PwaInstructions() {
@@ -145,6 +146,12 @@ export default function LoginPage() {
                   data-testid="password-input"
                   className="h-11 border-slate-200 focus:border-slate-500 focus:ring-slate-500 bg-slate-50"
                 />
+              </div>
+
+              <div className="text-right">
+                <Link href="/forgot-password" className="text-xs text-slate-500 hover:text-slate-700 underline">
+                  ¿Olvidaste tu contraseña?
+                </Link>
               </div>
 
               {error && (

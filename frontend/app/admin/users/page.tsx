@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, UserX, UserCheck, CalendarDays } from "lucide-react";
+import { Plus, Pencil, UserX, UserCheck, CalendarDays, KeyRound } from "lucide-react";
 
 interface User {
   id: string;
@@ -58,6 +58,15 @@ export default function UsersPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [features, setFeatures] = useState<Features>({ schedule_enabled: true, vacation_enabled: true });
+
+  // Reset password dialog
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [resetUser, setResetUser] = useState<User | null>(null);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetSendEmail, setResetSendEmail] = useState(true);
+  const [resetSaving, setResetSaving] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetSuccess, setResetSuccess] = useState(false);
 
   // Schedule dialog
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
@@ -123,6 +132,34 @@ export default function UsersPage() {
       setScheduleLoading(false)
     }
   }
+
+  const openResetPassword = (u: User) => {
+    setResetUser(u);
+    setResetPassword("");
+    setResetSendEmail(true);
+    setResetError(null);
+    setResetSuccess(false);
+    setShowResetDialog(true);
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetUser) return;
+    setResetSaving(true);
+    setResetError(null);
+    try {
+      await api.post(`/users/${resetUser.id}/reset-password`, {
+        new_password: resetPassword,
+        send_email: resetSendEmail,
+      });
+      setResetSuccess(true);
+      setTimeout(() => setShowResetDialog(false), 1500);
+    } catch (err: any) {
+      setResetError(err.response?.data?.detail || "Error al resetear la contraseña");
+    } finally {
+      setResetSaving(false);
+    }
+  };
 
   const openSchedule = (user: User) => {
     const year = new Date().getFullYear()
@@ -249,6 +286,17 @@ export default function UsersPage() {
                             <CalendarDays className="w-4 h-4 text-blue-600" aria-hidden="true" />
                           </Button>
                         )}
+                        {u.role === "worker" && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => openResetPassword(u)}
+                            aria-label="Resetear contraseña"
+                            title="Resetear contraseña"
+                          >
+                            <KeyRound className="w-4 h-4 text-amber-600" aria-hidden="true" />
+                          </Button>
+                        )}
                         <Button size="icon" variant="ghost" onClick={() => openEdit(u)} aria-label="Editar trabajador">
                           <Pencil className="w-4 h-4" aria-hidden="true" />
                         </Button>
@@ -364,6 +412,59 @@ export default function UsersPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Resetear contraseña — {resetUser?.full_name}</DialogTitle>
+          </DialogHeader>
+
+          {resetSuccess ? (
+            <div className="bg-green-50 border border-green-200 text-green-800 rounded-lg px-4 py-3 text-sm">
+              Contraseña actualizada correctamente.
+            </div>
+          ) : (
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label>Nueva contraseña</Label>
+                <Input
+                  type="password"
+                  value={resetPassword}
+                  onChange={(e) => setResetPassword(e.target.value)}
+                  required
+                  minLength={8}
+                  placeholder="Mínimo 8 caracteres"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="send-email-check"
+                  checked={resetSendEmail}
+                  onChange={(e) => setResetSendEmail(e.target.checked)}
+                  className="rounded"
+                />
+                <label htmlFor="send-email-check" className="text-sm text-slate-700">
+                  Enviar email al trabajador con la nueva contraseña
+                </label>
+              </div>
+
+              {resetError && <p className="text-sm text-destructive">{resetError}</p>}
+
+              <div className="flex gap-3 justify-end">
+                <Button type="button" variant="outline" onClick={() => setShowResetDialog(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={resetSaving}>
+                  {resetSaving ? "Guardando..." : "Resetear"}
+                </Button>
+              </div>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
 

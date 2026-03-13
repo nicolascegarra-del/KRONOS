@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
-import { LayoutDashboard, Clock, UserCircle, LogOut, ShieldCheck, CalendarRange } from "lucide-react";
+import { LayoutDashboard, Clock, UserCircle, LogOut, ShieldCheck, CalendarRange, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 
@@ -14,6 +14,7 @@ const BASE_NAV = [
   { href: "/worker/dashboard", label: "Inicio", icon: LayoutDashboard, feature: null },
   { href: "/worker/history", label: "Historial", icon: Clock, feature: null },
   { href: "/worker/absences", label: "Ausencias", icon: CalendarRange, feature: "vacation_enabled" },
+  { href: "/worker/turnos", label: "Turnos", icon: CalendarDays, feature: "schedule_enabled" },
   { href: "/worker/profile", label: "Perfil", icon: UserCircle, feature: null },
 ] as const;
 

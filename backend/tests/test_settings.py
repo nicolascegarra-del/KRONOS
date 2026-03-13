@@ -5,20 +5,25 @@ from tests.conftest import get_token
 
 
 @pytest.mark.asyncio
-async def test_admin_get_email_config_empty(client: AsyncClient, admin_user):
-    token = await get_token(client, "admin@test.com", "Admin1234!")
-    resp = await client.get("/settings/email", headers={"Authorization": f"Bearer {token}"})
+async def test_superadmin_get_email_config_empty(client: AsyncClient, superadmin_user, company):
+    """Superadmin can read email config for a company; returns empty defaults when not configured."""
+    superadmin_token = await get_token(client, "superadmin@test.com", "Super1234!")
+    resp = await client.get(
+        f"/companies/{company.id}/email-config",
+        headers={"Authorization": f"Bearer {superadmin_token}"},
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert "smtp_host" in data
     assert "has_password" in data
-    assert "smtp_password" not in data  # Password never returned
+    assert "smtp_password" not in data
 
 
 @pytest.mark.asyncio
-async def test_admin_save_email_config(client: AsyncClient, admin_user):
-    token = await get_token(client, "admin@test.com", "Admin1234!")
-    headers = {"Authorization": f"Bearer {token}"}
+async def test_superadmin_save_email_config(client: AsyncClient, superadmin_user, company):
+    """Superadmin can save and retrieve email config per company."""
+    superadmin_token = await get_token(client, "superadmin@test.com", "Super1234!")
+    headers = {"Authorization": f"Bearer {superadmin_token}"}
 
     payload = {
         "smtp_host": "smtp.gmail.com",
@@ -29,7 +34,7 @@ async def test_admin_save_email_config(client: AsyncClient, admin_user):
         "from_name": "Test App",
         "use_tls": True,
     }
-    resp = await client.put("/settings/email", headers=headers, json=payload)
+    resp = await client.put(f"/companies/{company.id}/email-config", headers=headers, json=payload)
     assert resp.status_code == 200
     data = resp.json()
     assert data["smtp_host"] == "smtp.gmail.com"
@@ -38,19 +43,20 @@ async def test_admin_save_email_config(client: AsyncClient, admin_user):
     assert "smtp_password" not in data
 
     # GET reflects saved config
-    resp2 = await client.get("/settings/email", headers=headers)
+    resp2 = await client.get(f"/companies/{company.id}/email-config", headers=headers)
     assert resp2.json()["smtp_host"] == "smtp.gmail.com"
 
 
 @pytest.mark.asyncio
-async def test_worker_cannot_access_settings(client: AsyncClient, worker_user):
-    token = await get_token(client, "worker@test.com", "Worker1234!")
-    headers = {"Authorization": f"Bearer {token}"}
+async def test_admin_cannot_access_email_config(client: AsyncClient, admin_user, company):
+    """Admin role cannot access company email config endpoints (superadmin only)."""
+    admin_token = await get_token(client, "admin@test.com", "Admin1234!")
+    headers = {"Authorization": f"Bearer {admin_token}"}
 
-    resp = await client.get("/settings/email", headers=headers)
+    resp = await client.get(f"/companies/{company.id}/email-config", headers=headers)
     assert resp.status_code == 403
 
-    resp = await client.put("/settings/email", headers=headers, json={})
+    resp = await client.put(f"/companies/{company.id}/email-config", headers=headers, json={})
     assert resp.status_code == 403
 
 

@@ -3,9 +3,9 @@ import io
 from datetime import date, datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,8 +14,44 @@ from app.database import get_session
 from app.dependencies import get_current_user
 from app.models.fichaje import Fichaje
 from app.models.user import User
+from app.schemas.user import UserRead
 
 router = APIRouter(prefix="/workers", tags=["workers"])
+
+
+@router.get("/me", response_model=UserRead)
+async def get_my_profile(
+    current_user: User = Depends(get_current_user),
+):
+    """Return the current worker's own profile data."""
+    return current_user
+
+
+class WorkerProfileUpdate(BaseModel):
+    full_name: str
+    email: EmailStr
+
+
+@router.put("/me/profile", response_model=UserRead)
+async def update_my_profile(
+    body: WorkerProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Worker can update their own full_name and email."""
+    if body.email != current_user.email:
+        existing = await session.execute(select(User).where(User.email == body.email))
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Ese email ya está en uso por otra cuenta",
+            )
+        current_user.email = body.email
+    current_user.full_name = body.full_name
+    session.add(current_user)
+    await session.commit()
+    await session.refresh(current_user)
+    return current_user
 
 
 @router.get("/me/export")
@@ -109,5 +145,29 @@ async def save_geo_consent(
     """RGPD Art. 7 — Record explicit geolocation consent."""
     current_user.geo_consent = body.accepted
     current_user.geo_consent_date = datetime.utcnow()
+    session.add(current_user)
+    await session.commit()
+
+
+class PreferencesBody(BaseModel):
+    monthly_report_enabled: bool
+
+
+@router.get("/me/preferences")
+async def get_preferences(
+    current_user: User = Depends(get_current_user),
+):
+    """Get worker notification preferences."""
+    return {"monthly_report_enabled": getattr(current_user, "monthly_report_enabled", False)}
+
+
+@router.put("/me/preferences", status_code=status.HTTP_204_NO_CONTENT)
+async def update_preferences(
+    body: PreferencesBody,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Worker notification preferences (e.g. monthly report opt-in)."""
+    current_user.monthly_report_enabled = body.monthly_report_enabled
     session.add(current_user)
     await session.commit()

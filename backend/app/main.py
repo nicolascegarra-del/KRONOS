@@ -1,5 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -117,6 +118,15 @@ async def _run_column_migrations() -> None:
         ))
         # (worker_schedule year/day_of_week constraint block removed — columns no longer exist)
 
+    # Email and user preference columns
+    async with engine.begin() as conn:
+        await conn.execute(text(
+            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS monthly_report_enabled BOOLEAN DEFAULT false'
+        ))
+        await conn.execute(text(
+            'ALTER TABLE email_config ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES company(id)'
+        ))
+
     # Soft-delete columns for fichaje — isolated block so a failure here never rolls back other migrations
     async with engine.begin() as conn:
         await conn.execute(text(
@@ -159,6 +169,80 @@ async def _run_column_migrations() -> None:
         pass
 
 
+async def _monthly_report_loop() -> None:
+    """Background task: send monthly fichaje summary on the 1st of each month."""
+    await asyncio.sleep(60)
+    last_sent_month: tuple | None = None
+    while True:
+        try:
+            now = datetime.utcnow()
+            if now.day == 1 and last_sent_month != (now.year, now.month):
+                await _send_monthly_reports(now)
+                last_sent_month = (now.year, now.month)
+        except Exception as exc:
+            print(f"[monthly-report] Error: {exc}")
+        await asyncio.sleep(3600)
+
+
+async def _send_monthly_reports(now: "datetime") -> None:
+    from calendar import monthrange
+    from sqlalchemy import select
+    from app.database import AsyncSessionLocal
+    from app.models.user import User, UserRole
+    from app.models.fichaje import Fichaje, FichajeStatus
+    from app.routers.settings import _get_email_config
+    from app.services.email_service import send_monthly_report_email
+
+    # Compute previous month range
+    first_of_this = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if first_of_this.month == 1:
+        prev_year, prev_month = first_of_this.year - 1, 12
+    else:
+        prev_year, prev_month = first_of_this.year, first_of_this.month - 1
+    _, last_day = monthrange(prev_year, prev_month)
+    month_start = first_of_this.replace(year=prev_year, month=prev_month, day=1)
+    month_end = first_of_this.replace(year=prev_year, month=prev_month, day=last_day,
+                                      hour=23, minute=59, second=59)
+    month_label = month_start.strftime("%B %Y")
+
+    async with AsyncSessionLocal() as session:
+        workers_result = await session.execute(
+            select(User).where(
+                User.role == UserRole.worker,
+                User.is_active == True,
+                User.monthly_report_enabled == True,
+            )
+        )
+        workers = workers_result.scalars().all()
+
+        for worker in workers:
+            fichajes_result = await session.execute(
+                select(Fichaje).where(
+                    Fichaje.user_id == worker.id,
+                    Fichaje.start_time >= month_start,
+                    Fichaje.start_time <= month_end,
+                    Fichaje.is_deleted == False,
+                ).order_by(Fichaje.start_time)
+            )
+            fichajes = fichajes_result.scalars().all()
+
+            rows = []
+            for f in fichajes:
+                rows.append({
+                    "date": f.start_time.strftime("%d/%m/%Y") if f.start_time else "",
+                    "start": f.start_time.strftime("%H:%M") if f.start_time else "",
+                    "end": f.end_time.strftime("%H:%M") if f.end_time else "—",
+                    "total": f"{f.total_minutes // 60}h {f.total_minutes % 60}min" if f.total_minutes else "—",
+                })
+
+            config = await _get_email_config(session, worker.company_id)
+            try:
+                await send_monthly_report_email(config, worker.email, worker.full_name, month_label, rows)
+                print(f"[monthly-report] Sent to {worker.email}")
+            except Exception as exc:
+                print(f"[monthly-report] Failed for {worker.email}: {exc}")
+
+
 _DEFAULT_SECRET = "change-me-in-production-very-secret-key"
 
 
@@ -172,21 +256,42 @@ async def lifespan(app: FastAPI):
         )
 
     from migrations.seed import seed
-    from app.database import init_db
+    from app.database import init_db, engine
     # register new models so SQLModel.metadata knows about their tables
     import app.models.fichajeeditlog  # noqa: F401
     import app.models.adminaccesslog  # noqa: F401
     import app.models.absence  # noqa: F401
+    import app.models.password_reset  # noqa: F401
+
+    # Pre-migration: drop email_config if it still uses the old integer PK
+    # so init_db() can recreate it with the new UUID PK + company_id schema.
+    try:
+        from sqlalchemy import text
+        async with engine.begin() as conn:
+            result = await conn.execute(text(
+                "SELECT data_type FROM information_schema.columns "
+                "WHERE table_name='email_config' AND column_name='id'"
+            ))
+            row = result.fetchone()
+            if row and row[0] in ("integer", "bigint", "smallint"):
+                await conn.execute(text("DROP TABLE email_config"))
+                print("[migration] Dropped old email_config (integer PK → UUID PK)")
+    except Exception as _e:
+        print(f"[migration] email_config pre-check skipped: {_e}")
+
     await init_db()
     await _run_column_migrations()
     await seed()
     task = asyncio.create_task(_auto_close_loop())
+    monthly_task = asyncio.create_task(_monthly_report_loop())
     yield
     task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
+    monthly_task.cancel()
+    for t in (task, monthly_task):
+        try:
+            await t
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(

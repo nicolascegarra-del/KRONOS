@@ -13,8 +13,11 @@ from app.models.fichaje import Fichaje
 from app.models.absence import Absence
 from app.models.user import User, UserRole
 from app.models.worker_schedule import WorkerSchedule
+from app.models.email_config import EmailConfig
 from app.schemas.company import CompanyCreate, CompanyPublic, CompanyRead, CompanyUpdate
+from app.schemas.email_config import EmailConfigRead, EmailConfigUpdate, EmailTestRequest
 from app.services.auth import hash_password
+from app.services.email_service import send_email
 
 router = APIRouter(prefix="/companies", tags=["companies"])
 
@@ -280,3 +283,103 @@ async def delete_company(
 
     await session.delete(company)
     await session.commit()
+
+
+# ── Email config (superadmin per company) ─────────────────────────────────────
+
+def _email_to_read(config: EmailConfig) -> EmailConfigRead:
+    return EmailConfigRead(
+        smtp_host=config.smtp_host,
+        smtp_port=config.smtp_port,
+        smtp_user=config.smtp_user,
+        from_email=config.from_email,
+        from_name=config.from_name,
+        use_tls=config.use_tls,
+        has_password=bool(config.smtp_password),
+    )
+
+
+@router.get("/{company_id}/email-config", response_model=EmailConfigRead)
+async def get_company_email_config(
+    company_id: UUID,
+    _: User = Depends(require_superadmin),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(
+        select(EmailConfig).where(EmailConfig.company_id == company_id)
+    )
+    config = result.scalar_one_or_none()
+    if not config:
+        return EmailConfigRead(
+            smtp_host="", smtp_port=587, smtp_user="",
+            from_email="", from_name="Fichajes", use_tls=True,
+        )
+    return _email_to_read(config)
+
+
+@router.put("/{company_id}/email-config", response_model=EmailConfigRead)
+async def save_company_email_config(
+    company_id: UUID,
+    body: EmailConfigUpdate,
+    _: User = Depends(require_superadmin),
+    session: AsyncSession = Depends(get_session),
+):
+    # Verify company exists
+    company_result = await session.execute(select(Company).where(Company.id == company_id))
+    if not company_result.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empresa no encontrada")
+
+    result = await session.execute(
+        select(EmailConfig).where(EmailConfig.company_id == company_id)
+    )
+    config = result.scalar_one_or_none()
+    if not config:
+        config = EmailConfig(company_id=company_id)
+
+    config.smtp_host = body.smtp_host
+    config.smtp_port = body.smtp_port
+    config.smtp_user = body.smtp_user
+    config.from_email = body.from_email
+    config.from_name = body.from_name
+    config.use_tls = body.use_tls
+    if body.smtp_password:
+        config.smtp_password = body.smtp_password
+
+    session.add(config)
+    await session.commit()
+    await session.refresh(config)
+    return _email_to_read(config)
+
+
+@router.post("/{company_id}/email-config/test")
+async def test_company_email_config(
+    company_id: UUID,
+    body: EmailTestRequest,
+    _: User = Depends(require_superadmin),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(
+        select(EmailConfig).where(EmailConfig.company_id == company_id)
+    )
+    config = result.scalar_one_or_none()
+    if not config or not config.smtp_host:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Configura primero el servidor SMTP para esta empresa",
+        )
+    try:
+        await send_email(
+            config,
+            to=body.to,
+            subject="✅ Test de configuración — Fichajes",
+            body_html=(
+                "<p>Este es un correo de prueba enviado desde <strong>Fichajes</strong>.</p>"
+                "<p>La configuración SMTP es correcta.</p>"
+            ),
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Error al enviar: {exc}",
+        )
+    return {"ok": True, "message": f"Email de prueba enviado a {body.to}"}

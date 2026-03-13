@@ -1,3 +1,4 @@
+import asyncio
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
@@ -5,6 +6,7 @@ from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.database import get_session
 from app.dependencies import require_admin
 from app.models.company import Company
@@ -25,6 +27,21 @@ async def _active_worker_count(session: AsyncSession, company_id: UUID) -> int:
         )
     )
     return result.scalar_one()
+
+
+async def _fire_welcome_email(company_id, to_email: str, full_name: str, password: str) -> None:
+    """Load email config and send welcome email (fire-and-forget, swallows errors)."""
+    try:
+        from app.database import AsyncSessionLocal
+        from app.routers.settings import _get_email_config
+        from app.services.email_service import send_welcome_email
+
+        cfg = get_settings()
+        async with AsyncSessionLocal() as session:
+            config = await _get_email_config(session, company_id)
+        await send_welcome_email(config, to_email, full_name, password, cfg.APP_URL)
+    except Exception as exc:
+        print(f"[welcome-email] Error: {exc}")
 
 
 @router.get("", response_model=list[UserRead])
@@ -86,7 +103,59 @@ async def create_user(
     session.add(user)
     await session.commit()
     await session.refresh(user)
+
+    # Fire-and-forget welcome email
+    asyncio.create_task(_fire_welcome_email(admin.company_id, user.email, user.full_name, body.password))
+
     return user
+
+
+@router.post("/{user_id}/reset-password", status_code=status.HTTP_204_NO_CONTENT)
+async def reset_user_password(
+    user_id: UUID,
+    body: dict,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(require_admin),
+):
+    """Admin resets a worker's password. Optionally sends email notification."""
+    result = await session.execute(
+        select(User).where(User.id == user_id, User.company_id == admin.company_id)
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    new_password: str = body.get("new_password", "")
+    if len(new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="La contraseña debe tener al menos 8 caracteres",
+        )
+
+    user.hashed_password = hash_password(new_password)
+    session.add(user)
+    await session.commit()
+
+    if body.get("send_email", True):
+        asyncio.create_task(_fire_admin_password_reset_email(
+            admin.company_id, user.email, user.full_name, new_password
+        ))
+
+
+async def _fire_admin_password_reset_email(
+    company_id, to_email: str, full_name: str, new_password: str
+) -> None:
+    try:
+        from app.database import AsyncSessionLocal
+        from app.routers.settings import _get_email_config
+        from app.services.email_service import send_admin_password_reset_email
+
+        cfg = get_settings()
+        async with AsyncSessionLocal() as session:
+            config = await _get_email_config(session, company_id)
+        await send_admin_password_reset_email(config, to_email, full_name, new_password, cfg.APP_URL)
+    except Exception as exc:
+        print(f"[admin-reset-email] Error: {exc}")
 
 
 @router.put("/{user_id}", response_model=UserRead)

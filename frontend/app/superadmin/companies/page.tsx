@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Building2, Pencil, Trash2, Plus, MapPin, MapPinOff, FileX, ImagePlus } from "lucide-react";
+import { Building2, Pencil, Trash2, Plus, MapPin, MapPinOff, FileX, ImagePlus, Send, Save } from "lucide-react";
 
 interface CompanyRead {
   id: string;
@@ -62,6 +62,17 @@ interface EditForm {
   billing_email: string;
 }
 
+interface EmailConfigForm {
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user: string;
+  smtp_password: string;
+  from_email: string;
+  from_name: string;
+  use_tls: boolean;
+  has_password: boolean;
+}
+
 const emptyCreate: CreateForm = {
   name: "",
   max_workers: 10,
@@ -85,6 +96,17 @@ export default function CompaniesPage() {
   const [editForm, setEditForm] = useState<EditForm>({ name: "", max_workers: 10, geo_enabled: true, schedule_enabled: true, vacation_enabled: true, nif: "", address: "", city: "", postal_code: "", phone: "", billing_email: "" });
   const [editError, setEditError] = useState<string | null>(null);
   const [editLoading, setEditLoading] = useState(false);
+
+  // Email config (inside edit dialog)
+  const [emailForm, setEmailForm] = useState<EmailConfigForm>({
+    smtp_host: "", smtp_port: 587, smtp_user: "", smtp_password: "",
+    from_email: "", from_name: "Fichajes", use_tls: true, has_password: false,
+  });
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailMsg, setEmailMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [emailTestTo, setEmailTestTo] = useState("");
+  const [emailTesting, setEmailTesting] = useState(false);
+  const [emailTestMsg, setEmailTestMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Delete company confirm
   const [deleteTarget, setDeleteTarget] = useState<CompanyRead | null>(null);
@@ -183,6 +205,13 @@ export default function CompaniesPage() {
       billing_email: c.billing_email ?? "",
     });
     setEditError(null);
+    setEmailMsg(null);
+    setEmailTestMsg(null);
+    setEmailTestTo("");
+    // Load email config for this company
+    api.get<EmailConfigForm>(`/companies/${c.id}/email-config`).then((res) => {
+      setEmailForm({ ...res.data, smtp_password: "" });
+    }).catch(() => {});
   };
 
   const handleEdit = async (e: React.FormEvent) => {
@@ -200,6 +229,44 @@ export default function CompaniesPage() {
       );
     } finally {
       setEditLoading(false);
+    }
+  };
+
+  const handleSaveEmail = async () => {
+    if (!editTarget) return;
+    setEmailSaving(true);
+    setEmailMsg(null);
+    try {
+      const body: Record<string, string | number | boolean> = {
+        smtp_host: emailForm.smtp_host,
+        smtp_port: emailForm.smtp_port,
+        smtp_user: emailForm.smtp_user,
+        from_email: emailForm.from_email,
+        from_name: emailForm.from_name,
+        use_tls: emailForm.use_tls,
+      };
+      if (emailForm.smtp_password) body.smtp_password = emailForm.smtp_password;
+      const res = await api.put<EmailConfigForm>(`/companies/${editTarget.id}/email-config`, body);
+      setEmailForm({ ...res.data, smtp_password: "" });
+      setEmailMsg({ ok: true, text: "Configuración SMTP guardada." });
+    } catch (err: any) {
+      setEmailMsg({ ok: false, text: err.response?.data?.detail || "Error al guardar" });
+    } finally {
+      setEmailSaving(false);
+    }
+  };
+
+  const handleTestEmail = async () => {
+    if (!editTarget || !emailTestTo) return;
+    setEmailTesting(true);
+    setEmailTestMsg(null);
+    try {
+      const res = await api.post<{ message: string }>(`/companies/${editTarget.id}/email-config/test`, { to: emailTestTo });
+      setEmailTestMsg({ ok: true, text: res.data.message });
+    } catch (err: any) {
+      setEmailTestMsg({ ok: false, text: err.response?.data?.detail || "Error al enviar el test" });
+    } finally {
+      setEmailTesting(false);
     }
   };
 
@@ -546,6 +613,119 @@ export default function CompaniesPage() {
               </Button>
             </div>
           </form>
+
+          {/* Email config section */}
+          <div className="border-t pt-4 space-y-3 mt-2">
+            <p className="text-sm font-semibold text-slate-700">Servidor de correo (SMTP)</p>
+            <p className="text-xs text-muted-foreground">
+              Configura el servidor SMTP que usará esta empresa para enviar emails de bienvenida, recuperación de contraseña y resúmenes mensuales.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 space-y-1">
+                <Label>Servidor SMTP</Label>
+                <Input
+                  placeholder="smtp.gmail.com"
+                  value={emailForm.smtp_host}
+                  onChange={(e) => setEmailForm((f) => ({ ...f, smtp_host: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Puerto</Label>
+                <Input
+                  type="number"
+                  value={emailForm.smtp_port}
+                  onChange={(e) => setEmailForm((f) => ({ ...f, smtp_port: Number(e.target.value) }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Seguridad</Label>
+                <select
+                  value={emailForm.use_tls ? "tls" : "ssl"}
+                  onChange={(e) => setEmailForm((f) => ({ ...f, use_tls: e.target.value === "tls" }))}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                >
+                  <option value="tls">STARTTLS</option>
+                  <option value="ssl">SSL/TLS</option>
+                </select>
+              </div>
+              <div className="col-span-2 space-y-1">
+                <Label>Usuario SMTP</Label>
+                <Input
+                  type="email"
+                  placeholder="tu@gmail.com"
+                  value={emailForm.smtp_user}
+                  onChange={(e) => setEmailForm((f) => ({ ...f, smtp_user: e.target.value }))}
+                />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <Label>
+                  Contraseña SMTP
+                  {emailForm.has_password && (
+                    <span className="ml-2 text-xs text-green-600 font-normal">✓ guardada</span>
+                  )}
+                </Label>
+                <Input
+                  type="password"
+                  placeholder={emailForm.has_password ? "•••••••• (vacío = no cambiar)" : "Contraseña SMTP"}
+                  value={emailForm.smtp_password}
+                  onChange={(e) => setEmailForm((f) => ({ ...f, smtp_password: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Nombre remitente</Label>
+                <Input
+                  value={emailForm.from_name}
+                  onChange={(e) => setEmailForm((f) => ({ ...f, from_name: e.target.value }))}
+                  placeholder="Fichajes"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Email remitente (From)</Label>
+                <Input
+                  type="email"
+                  placeholder="info@empresa.com"
+                  value={emailForm.from_email}
+                  onChange={(e) => setEmailForm((f) => ({ ...f, from_email: e.target.value }))}
+                />
+              </div>
+            </div>
+            {emailMsg && (
+              <p className={`text-sm ${emailMsg.ok ? "text-green-600" : "text-destructive"}`}>{emailMsg.text}</p>
+            )}
+            <Button type="button" size="sm" onClick={handleSaveEmail} disabled={emailSaving} className="flex items-center gap-2">
+              <Save className="w-3.5 h-3.5" />
+              {emailSaving ? "Guardando..." : "Guardar SMTP"}
+            </Button>
+
+            {/* Test email */}
+            <div className="border-t pt-3 space-y-2">
+              <p className="text-xs font-medium text-slate-600">Enviar email de prueba</p>
+              <div className="flex gap-2 items-end">
+                <div className="flex-1 space-y-1">
+                  <Input
+                    type="email"
+                    placeholder="destinatario@test.com"
+                    value={emailTestTo}
+                    onChange={(e) => setEmailTestTo(e.target.value)}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTestEmail}
+                  disabled={emailTesting || !emailTestTo}
+                  className="flex items-center gap-2"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  {emailTesting ? "Enviando..." : "Test"}
+                </Button>
+              </div>
+              {emailTestMsg && (
+                <p className={`text-xs ${emailTestMsg.ok ? "text-green-600" : "text-destructive"}`}>{emailTestMsg.text}</p>
+              )}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
