@@ -127,40 +127,23 @@ async def _run_column_migrations() -> None:
         ))
 
     # worker_schedule: migrate from (year, day_of_week) → schedule_date
-    async with engine.begin() as conn:
+    # Each step in its own engine.begin() so a failure never aborts the whole transaction.
+    for _sql in [
+        "ALTER TABLE worker_schedule ADD COLUMN IF NOT EXISTS schedule_date DATE",
+        "DELETE FROM worker_schedule WHERE schedule_date IS NULL",
+        "ALTER TABLE worker_schedule DROP CONSTRAINT IF EXISTS uq_worker_schedule_user_year_day",
+        "ALTER TABLE worker_schedule DROP COLUMN IF EXISTS year",
+        "ALTER TABLE worker_schedule DROP COLUMN IF EXISTS day_of_week",
+    ]:
         try:
-            await conn.execute(text(
-                "ALTER TABLE worker_schedule ADD COLUMN IF NOT EXISTS schedule_date DATE"
-            ))
+            async with engine.begin() as conn:
+                await conn.execute(text(_sql))
         except Exception:
             pass
-        try:
-            await conn.execute(text(
-                "DELETE FROM worker_schedule WHERE schedule_date IS NULL"
-            ))
-        except Exception:
-            pass
-        try:
-            await conn.execute(text(
-                "ALTER TABLE worker_schedule DROP CONSTRAINT IF EXISTS uq_worker_schedule_user_year_day"
-            ))
-        except Exception:
-            pass
-        try:
-            await conn.execute(text(
-                "ALTER TABLE worker_schedule DROP COLUMN IF EXISTS year"
-            ))
-        except Exception:
-            pass
-        try:
-            await conn.execute(text(
-                "ALTER TABLE worker_schedule DROP COLUMN IF EXISTS day_of_week"
-            ))
-        except Exception:
-            pass
-        # Add new unique constraint if not exists
-        try:
-            await conn.execute(text("""
+    # Add new unique constraint (DO $$ cannot run inside a regular transaction on some PG versions)
+    try:
+        async with engine.connect() as conn:
+            await conn.execution_options(isolation_level="AUTOCOMMIT").execute(text("""
                 DO $$
                 BEGIN
                     IF NOT EXISTS (
@@ -172,8 +155,8 @@ async def _run_column_migrations() -> None:
                     END IF;
                 END $$;
             """))
-        except Exception:
-            pass
+    except Exception:
+        pass
 
 
 _DEFAULT_SECRET = "change-me-in-production-very-secret-key"
