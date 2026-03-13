@@ -89,16 +89,17 @@ export default function WorkerLayout({
       )}
 
       {/* Top header */}
-      <header className="bg-slate-900 text-white px-4 py-3 flex items-center gap-3">
-        {companyLogo ? (
-          <div className="flex items-center gap-2">
-            <img src={companyLogo} alt={companyName ?? "Logo"} className="h-9 w-auto max-w-[130px] object-contain rounded" />
-            <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wide leading-none">by Kronos</span>
-          </div>
-        ) : (
-          <img src="/logo_kronos.png" alt="Kronos" className="h-10 w-auto" />
-        )}
-        <div className="flex-1" />
+      <header className="bg-slate-900 text-white px-4 py-3 flex items-center">
+        {/* Branding: Kronos centered + company logo below */}
+        <div className="flex-1 flex flex-col items-center gap-0.5">
+          <img src="/logo_kronos.png" alt="Kronos" className="h-10 w-auto max-w-[160px] object-contain" />
+          <span className="text-[8px] text-slate-500 font-semibold uppercase tracking-widest leading-none">Powered by Klyp</span>
+          {companyLogo && (
+            <div className="mt-1.5 pt-1.5 border-t border-slate-700 w-full flex flex-col items-center gap-0.5">
+              <img src={companyLogo} alt={companyName ?? "Logo empresa"} className="h-7 w-auto max-w-[120px] object-contain" />
+            </div>
+          )}
+        </div>
         <button
           onClick={handleLogout}
           title={user?.email}

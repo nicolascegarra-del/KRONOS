@@ -72,20 +72,25 @@ export default function AdminLayout({
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         )}
       >
-        <div className="flex items-center justify-between px-4 py-4 border-b border-slate-700">
-          <div className="flex flex-col gap-2 min-w-0">
-            {companyLogo ? (
-              <>
-                <img src={companyLogo} alt={companyName ?? "Logo"} className="h-10 w-auto max-w-[160px] object-contain rounded" />
-                <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wide">Powered by Kronos</span>
-              </>
-            ) : (
-              <img src="/logo_kronos.png" alt="Kronos" className="h-12 w-auto max-w-[180px]" />
-            )}
+        {/* Sidebar branding */}
+        <div className="px-4 pt-5 pb-4 border-b border-slate-700">
+          <div className="flex items-start justify-between">
+            {/* Kronos logo — centered, bigger */}
+            <div className="flex-1 flex flex-col items-center gap-1">
+              <img src="/logo_kronos.png" alt="Kronos" className="h-14 w-auto max-w-[200px] object-contain" />
+              <span className="text-[9px] text-slate-500 font-semibold uppercase tracking-widest">Powered by Klyp</span>
+            </div>
+            <button className="md:hidden mt-1 shrink-0" onClick={() => setSidebarOpen(false)}>
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button className="md:hidden" onClick={() => setSidebarOpen(false)}>
-            <X className="w-5 h-5" />
-          </button>
+          {/* Company logo — shown below if available */}
+          {companyLogo && (
+            <div className="mt-3 pt-3 border-t border-slate-700 flex flex-col items-center gap-1">
+              <img src={companyLogo} alt={companyName ?? "Logo empresa"} className="h-9 w-auto max-w-[160px] object-contain" />
+              {companyName && <span className="text-[10px] text-slate-400 font-medium truncate max-w-[150px]">{companyName}</span>}
+            </div>
+          )}
         </div>
 
         <nav className="flex-1 p-4 space-y-1">
@@ -120,8 +125,8 @@ export default function AdminLayout({
       <div className="flex-1 flex flex-col min-w-0">
         <header className="bg-slate-900 text-white px-4 py-3 flex items-center gap-3">
           {companyLogo
-            ? <img src={companyLogo} alt={companyName ?? "Logo"} className="h-9 w-auto max-w-[120px] object-contain rounded md:hidden" />
-            : <img src="/logo_kronos.png" alt="Kronos" className="h-10 w-auto md:hidden" />
+            ? <img src={companyLogo} alt={companyName ?? "Logo"} className="h-8 w-auto max-w-[110px] object-contain md:hidden" />
+            : <img src="/logo_kronos.png" alt="Kronos" className="h-8 w-auto max-w-[110px] object-contain md:hidden" />
           }
           <div className="flex-1" />
           <NotificationBell />
