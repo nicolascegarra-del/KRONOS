@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
@@ -23,16 +23,6 @@ export default function WorkerLayout({
   const router = useRouter();
   const { user, logout, setUser } = useAuthStore();
   const [acceptingNotice, setAcceptingNotice] = useState(false);
-  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
-  const [companyName, setCompanyName] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (user?.company_id) {
-      api.get<{ logo_url?: string; name: string }>("/companies/mine")
-        .then((r) => { setCompanyLogo(r.data.logo_url ?? null); setCompanyName(r.data.name); })
-        .catch(() => {});
-    }
-  }, [user?.company_id]);
 
   const handleAcceptNotice = async () => {
     setAcceptingNotice(true);
@@ -73,7 +63,7 @@ export default function WorkerLayout({
                 <li><span className="font-medium">Conservación:</span> 4 años, conforme al Art. 34.9 ET.</li>
                 <li><span className="font-medium">Destinatarios:</span> El administrador de tu empresa y, en caso de inspección, la Inspección de Trabajo.</li>
                 <li>
-                  <span className="font-medium">Tus derechos:</span> Acceso, rectificación, portabilidad (descarga de datos disponible en "Mi Historial") y limitación del tratamiento, dirigiéndote a tu empresa.
+                  <span className="font-medium">Tus derechos:</span> Acceso, rectificación, portabilidad (descarga de datos disponible en &quot;Mi Historial&quot;) y limitación del tratamiento, dirigiéndote a tu empresa.
                 </li>
               </ul>
             </div>
@@ -90,14 +80,8 @@ export default function WorkerLayout({
 
       {/* Top header */}
       <header className="bg-slate-900 text-white px-4 py-3 flex items-center">
-        {/* Branding: Kronos centered + company logo below */}
-        <div className="flex-1 flex flex-col items-center gap-0.5">
+        <div className="flex-1 flex justify-center">
           <img src="/logo_kronos.png" alt="Kronos" className="h-10 w-auto max-w-[160px] object-contain" />
-          {companyLogo && (
-            <div className="mt-1.5 pt-1.5 border-t border-slate-700 w-full flex flex-col items-center gap-0.5">
-              <img src={companyLogo} alt={companyName ?? "Logo empresa"} className="h-7 w-auto max-w-[120px] object-contain" />
-            </div>
-          )}
         </div>
         <button
           onClick={handleLogout}

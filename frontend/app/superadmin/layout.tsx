@@ -50,7 +50,7 @@ export default function SuperAdminLayout({
       >
         <div className="px-4 pt-5 pb-4 border-b border-slate-700">
           <div className="flex items-start justify-between">
-            <div className="flex-1 flex flex-col items-center gap-1">
+            <div className="flex-1 flex justify-center">
               <img src="/logo_kronos.png" alt="Kronos" className="h-14 w-auto max-w-[200px] object-contain" />
             </div>
             <button className="md:hidden mt-1 shrink-0" onClick={() => setSidebarOpen(false)} aria-label="Cerrar menú">

@@ -2,13 +2,18 @@ import base64
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.dependencies import get_current_user, require_superadmin
+from app.models.adminaccesslog import AdminAccessLog
 from app.models.company import Company
+from app.models.fichaje import Fichaje
+from app.models.fichajeeditlog import FichajeEditLog
+from app.models.pausa import Pausa
 from app.models.user import User, UserRole
+from app.models.worker_schedule import WorkerSchedule
 from app.schemas.company import CompanyCreate, CompanyPublic, CompanyRead, CompanyUpdate
 from app.services.auth import hash_password
 
@@ -224,14 +229,26 @@ async def delete_company(
     if not company:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empresa no encontrada")
 
-    user_count_result = await session.execute(
-        select(func.count()).select_from(User).where(User.company_id == company_id)
-    )
-    if user_count_result.scalar_one() > 0:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="No se puede eliminar una empresa con usuarios asociados",
-        )
+    # Get all user IDs for this company
+    users_result = await session.execute(select(User.id).where(User.company_id == company_id))
+    user_ids = [row[0] for row in users_result.all()]
+
+    if user_ids:
+        # Get all fichaje IDs for these users
+        fichaje_result = await session.execute(select(Fichaje.id).where(Fichaje.user_id.in_(user_ids)))
+        fichaje_ids = [row[0] for row in fichaje_result.all()]
+
+        if fichaje_ids:
+            await session.execute(delete(FichajeEditLog).where(FichajeEditLog.fichaje_id.in_(fichaje_ids)))
+            await session.execute(delete(Pausa).where(Pausa.fichaje_id.in_(fichaje_ids)))
+            await session.execute(delete(Fichaje).where(Fichaje.id.in_(fichaje_ids)))
+
+        # Nullify FK references to these users before deleting them
+        await session.execute(update(Fichaje).where(Fichaje.last_edited_by_id.in_(user_ids)).values(last_edited_by_id=None))
+        await session.execute(delete(FichajeEditLog).where(FichajeEditLog.edited_by_id.in_(user_ids)))
+        await session.execute(delete(AdminAccessLog).where(AdminAccessLog.admin_id.in_(user_ids)))
+        await session.execute(delete(WorkerSchedule).where(WorkerSchedule.user_id.in_(user_ids)))
+        await session.execute(delete(User).where(User.id.in_(user_ids)))
 
     await session.delete(company)
     await session.commit()
