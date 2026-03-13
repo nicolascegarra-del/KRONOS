@@ -4,7 +4,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import delete as sa_delete, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +21,7 @@ from app.schemas.fichaje import (
     FichajeEditLogRead, FieldChange,
     PauseRequest, StartRequest, EndRequest, ResumeRequest,
 )
+from app.models.fichajeeditlog import FichajeEditLog
 from app.services.access_log import log_admin_access
 from app.services.geofence import is_within_any_work_center
 from app.services.hours import calculate_total_minutes, calculate_late_minutes
@@ -392,16 +393,9 @@ async def admin_delete_fichaje(
     if not fichaje:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fichaje not found")
 
-    # delete associated edit logs first
-    from app.models.fichajeeditlog import FichajeEditLog
-    logs_result = await session.execute(
-        select(FichajeEditLog).where(FichajeEditLog.fichaje_id == fichaje_id)
-    )
-    for log in logs_result.scalars().all():
-        await session.delete(log)
-
-    for p in fichaje.pausas:
-        await session.delete(p)
+    # delete associated edit logs and pausas first (FK constraints)
+    await session.execute(sa_delete(FichajeEditLog).where(FichajeEditLog.fichaje_id == fichaje_id))
+    await session.execute(sa_delete(Pausa).where(Pausa.fichaje_id == fichaje_id))
     await session.delete(fichaje)
     await session.commit()
 
