@@ -93,6 +93,11 @@ class FieldChange(BaseModel):
     after: Optional[str] = None
 
 
+class FichajeAdminListResponse(BaseModel):
+    items: List[FichajeAdminRead]
+    total: int
+
+
 class FichajeEditLogRead(BaseModel):
     id: UUID
     edited_at: datetime
