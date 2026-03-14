@@ -199,15 +199,14 @@ async def _send_monthly_reports(now: "datetime") -> None:
 _DEFAULT_SECRET = "change-me-in-production-very-secret-key"
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Fail fast if production is running with the default insecure secret key
-    if app_settings.APP_ENV == "production" and app_settings.SECRET_KEY == _DEFAULT_SECRET:
-        raise RuntimeError(
-            "FATAL: SECRET_KEY is still the default value. "
-            "Set SECRET_KEY to a strong random string in your production .env file."
-        )
-
+async def _do_startup() -> None:
+    """
+    Run all DB migrations and seed data as a background task.
+    Running this in the background (instead of blocking the lifespan before yield)
+    means the HTTP server — and the /health endpoint — starts immediately,
+    so the Docker health check passes even when migrations take a long time
+    (e.g. creating indexes on large production tables for the first time).
+    """
     from migrations.seed import seed
     from app.database import init_db, engine
     # register new models so SQLModel.metadata knows about their tables
@@ -232,15 +231,41 @@ async def lifespan(app: FastAPI):
     except Exception as _e:
         print(f"[migration] email_config pre-check skipped: {_e}")
 
-    await init_db()
+    try:
+        await init_db()
+    except Exception as exc:
+        print(f"[startup] init_db failed: {exc}")
+
     await _run_column_migrations()
-    await seed()
+
+    try:
+        await seed()
+    except Exception as exc:
+        print(f"[startup] seed failed: {exc}")
+
+    print("[startup] DB initialization complete.")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Fail fast if production is running with the default insecure secret key
+    if app_settings.APP_ENV == "production" and app_settings.SECRET_KEY == _DEFAULT_SECRET:
+        raise RuntimeError(
+            "FATAL: SECRET_KEY is still the default value. "
+            "Set SECRET_KEY to a strong random string in your production .env file."
+        )
+
+    # Run migrations in background so the HTTP server (and /health) starts immediately.
+    # This prevents the Docker health check from timing out when index creation
+    # or other heavy migrations run for the first time on a production database.
+    startup_task = asyncio.create_task(_do_startup())
     task = asyncio.create_task(_auto_close_loop())
     monthly_task = asyncio.create_task(_monthly_report_loop())
     yield
+    startup_task.cancel()
     task.cancel()
     monthly_task.cancel()
-    for t in (task, monthly_task):
+    for t in (startup_task, task, monthly_task):
         try:
             await t
         except asyncio.CancelledError:
