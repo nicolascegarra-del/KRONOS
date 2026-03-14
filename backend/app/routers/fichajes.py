@@ -49,10 +49,10 @@ async def _get_active_fichaje(user_id: UUID, session: AsyncSession) -> Fichaje |
 async def _reload(session: AsyncSession, fichaje_id: UUID) -> Fichaje:
     """Reload a fichaje with its pausas — expunge first to bypass identity-map cache."""
     # Expunge any cached instance so SQLAlchemy fetches fresh data from DB
-    from sqlalchemy import inspect as sa_inspect
     try:
-        cached = session.get_one(Fichaje, fichaje_id)
-        session.expunge(cached)
+        cached = await session.get(Fichaje, fichaje_id)
+        if cached is not None:
+            session.expunge(cached)
     except Exception:
         pass
     result = await session.execute(
