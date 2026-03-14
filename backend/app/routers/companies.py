@@ -144,10 +144,20 @@ async def list_companies(
 ):
     result = await session.execute(select(Company).order_by(Company.created_at))
     companies = result.scalars().all()
-    out = []
-    for c in companies:
-        out.append(_to_read(c, await _worker_count(session, c.id)))
-    return out
+
+    # Single query for all worker counts (avoids N+1)
+    counts_result = await session.execute(
+        select(User.company_id, func.count().label("cnt"))
+        .where(
+            User.company_id.in_([c.id for c in companies]),
+            User.role == UserRole.worker,
+            User.is_active == True,
+        )
+        .group_by(User.company_id)
+    )
+    counts: dict = {row.company_id: row.cnt for row in counts_result.all()}
+
+    return [_to_read(c, counts.get(c.id, 0)) for c in companies]
 
 
 @router.post("", response_model=CompanyRead, status_code=status.HTTP_201_CREATED)
