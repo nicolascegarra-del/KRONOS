@@ -12,13 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_session
 from app.dependencies import get_current_user, require_admin, require_superadmin
 from app.models.company import Company
-from app.models.email_config import EmailConfig
 from app.models.fichaje import Fichaje, FichajeStatus
 from app.models.pausa import Pausa
 from app.models.user import User, UserRole
 from app.models.work_center import WorkCenter
 from app.schemas.fichaje import (
-    FichajeAdminRead, FichajeAdminUpdate, FichajeRead,
+    FichajeAdminRead, FichajeAdminListResponse, FichajeAdminUpdate, FichajeRead,
     FichajeEditLogRead, FieldChange,
     PauseRequest, StartRequest, EndRequest, ResumeRequest,
 )
@@ -98,6 +97,7 @@ async def start_fichaje(
             Fichaje.user_id == current_user.id,
             Fichaje.status == FichajeStatus.finished,
             Fichaje.end_time.isnot(None),
+            Fichaje.is_deleted == False,
         )
         .order_by(Fichaje.end_time.desc())
         .limit(1)
@@ -134,8 +134,8 @@ async def _notify_out_of_range(worker: User, session: AsyncSession) -> None:
     """Send an email to all company admins when a worker clocks in out of range."""
     try:
         from app.services.email_service import send_email
-        config_result = await session.execute(select(EmailConfig).where(EmailConfig.id == 1))
-        config = config_result.scalar_one_or_none()
+        from app.routers.settings import _get_email_config
+        config = await _get_email_config(session, worker.company_id)
         if not config or not config.smtp_host:
             return
 
@@ -285,33 +285,49 @@ async def get_my_fichajes(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/admin", response_model=list[FichajeAdminRead])
+@router.get("/admin", response_model=FichajeAdminListResponse)
 async def admin_list_fichajes(
     user_id: Optional[UUID] = None,
     fichaje_status: Optional[FichajeStatus] = Query(default=None, alias="status"),
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     admin: User = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
     import json
+    from sqlalchemy import func as sql_func
+
+    base_where = [User.company_id == admin.company_id, Fichaje.is_deleted == False]
+    if user_id:
+        base_where.append(Fichaje.user_id == user_id)
+    if fichaje_status:
+        base_where.append(Fichaje.status == fichaje_status)
+    if from_date:
+        base_where.append(Fichaje.start_time >= datetime.combine(from_date, datetime.min.time()))
+    if to_date:
+        base_where.append(Fichaje.start_time <= datetime.combine(to_date, datetime.max.time()))
+
+    count_q = (
+        select(sql_func.count())
+        .select_from(Fichaje)
+        .join(User, Fichaje.user_id == User.id)
+        .where(*base_where)
+    )
+    total = (await session.execute(count_q)).scalar_one()
+
     query = (
         select(Fichaje)
         .join(User, Fichaje.user_id == User.id)
         .options(selectinload(Fichaje.user), selectinload(Fichaje.pausas))
-        .where(User.company_id == admin.company_id, Fichaje.is_deleted == False)
+        .where(*base_where)
         .order_by(Fichaje.start_time.desc())
+        .limit(limit)
+        .offset(offset)
     )
-    if user_id:
-        query = query.where(Fichaje.user_id == user_id)
-    if fichaje_status:
-        query = query.where(Fichaje.status == fichaje_status)
-    if from_date:
-        query = query.where(Fichaje.start_time >= datetime.combine(from_date, datetime.min.time()))
-    if to_date:
-        query = query.where(Fichaje.start_time <= datetime.combine(to_date, datetime.max.time()))
-    result = await session.execute(query)
-    rows = result.scalars().all()
+    rows = (await session.execute(query)).scalars().all()
+
     details = json.dumps({
         "user_id": str(user_id) if user_id else None,
         "status": fichaje_status.value if fichaje_status else None,
@@ -319,7 +335,7 @@ async def admin_list_fichajes(
         "to_date": to_date.isoformat() if to_date else None,
     })
     await log_admin_access(admin.id, "VIEW_FICHAJES", details)
-    return rows
+    return FichajeAdminListResponse(items=list(rows), total=total)
 
 
 @router.post("/admin/{fichaje_id}/end", response_model=FichajeRead)

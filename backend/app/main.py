@@ -37,120 +37,70 @@ async def _auto_close_loop() -> None:
 
 
 async def _run_column_migrations() -> None:
-    """Add new columns to existing tables without dropping data (idempotent)."""
+    """Add new columns to existing tables without dropping data (idempotent).
+
+    Each statement runs in its own transaction so a single failure never
+    prevents the rest of the migrations — or the app — from starting.
+    """
     from sqlalchemy import text
     from app.database import engine
-    async with engine.begin() as conn:
-        await conn.execute(text(
-            'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS modalidad VARCHAR'
-        ))
-        await conn.execute(text(
-            'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS edit_comment TEXT'
-        ))
-        await conn.execute(text(
-            'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS last_edited_by_id UUID REFERENCES "user"(id)'
-        ))
-        await conn.execute(text(
-            'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS last_edited_at TIMESTAMP'
-        ))
-        await conn.execute(text(
-            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS dni VARCHAR'
-        ))
-        await conn.execute(text(
-            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS geo_consent BOOLEAN'
-        ))
-        await conn.execute(text(
-            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS geo_consent_date TIMESTAMP'
-        ))
-        await conn.execute(text(
-            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS privacy_notice_accepted BOOLEAN'
-        ))
-        await conn.execute(text(
-            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS privacy_notice_date TIMESTAMP'
-        ))
-        await conn.execute(text(
-            'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS rest_violation BOOLEAN'
-        ))
-        await conn.execute(text(
-            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS scheduled_end TIME'
-        ))
-        await conn.execute(text(
-            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS work_center_id UUID REFERENCES work_center(id)'
-        ))
-        # Workers already using the app are assumed to have implicitly consented
-        await conn.execute(text(
-            "UPDATE \"user\" SET geo_consent = true, geo_consent_date = NOW() "
-            "WHERE role = 'worker' AND geo_consent IS NULL"
-        ))
-        # Performance indexes (idempotent)
-        await conn.execute(text(
-            'CREATE INDEX IF NOT EXISTS ix_fichaje_user_id ON fichaje (user_id)'
-        ))
-        await conn.execute(text(
-            'CREATE INDEX IF NOT EXISTS ix_fichaje_status ON fichaje (status)'
-        ))
-        await conn.execute(text(
-            'CREATE INDEX IF NOT EXISTS ix_fichaje_start_time ON fichaje (start_time)'
-        ))
-        await conn.execute(text(
-            'CREATE INDEX IF NOT EXISTS ix_user_company_id ON "user" (company_id)'
-        ))
-        await conn.execute(text(
-            'CREATE INDEX IF NOT EXISTS ix_user_role ON "user" (role)'
-        ))
-        await conn.execute(text(
-            'CREATE INDEX IF NOT EXISTS ix_admin_access_log_admin_id ON admin_access_log (admin_id)'
-        ))
-        await conn.execute(text(
-            'CREATE INDEX IF NOT EXISTS ix_admin_access_log_accessed_at ON admin_access_log (accessed_at)'
-        ))
-        await conn.execute(text(
-            'ALTER TABLE company ADD COLUMN IF NOT EXISTS logo_url TEXT'
-        ))
-        await conn.execute(text(
-            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS vacation_days INTEGER DEFAULT 22'
-        ))
-        await conn.execute(text(
-            'ALTER TABLE company ADD COLUMN IF NOT EXISTS schedule_enabled BOOLEAN DEFAULT true'
-        ))
-        await conn.execute(text(
-            'ALTER TABLE company ADD COLUMN IF NOT EXISTS vacation_enabled BOOLEAN DEFAULT true'
-        ))
-        # (worker_schedule year/day_of_week constraint block removed — columns no longer exist)
 
-    # Email and user preference columns
-    async with engine.begin() as conn:
-        await conn.execute(text(
-            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS monthly_report_enabled BOOLEAN DEFAULT false'
-        ))
-        await conn.execute(text(
-            'ALTER TABLE email_config ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES company(id)'
-        ))
+    _migrations = [
+        # fichaje columns
+        'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS modalidad VARCHAR',
+        'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS edit_comment TEXT',
+        'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS last_edited_by_id UUID REFERENCES "user"(id)',
+        'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS last_edited_at TIMESTAMP',
+        'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS rest_violation BOOLEAN',
+        'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false',
+        'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP',
+        # user columns
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS dni VARCHAR',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS geo_consent BOOLEAN',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS geo_consent_date TIMESTAMP',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS privacy_notice_accepted BOOLEAN',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS privacy_notice_date TIMESTAMP',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS scheduled_end TIME',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS work_center_id UUID REFERENCES work_center(id)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS vacation_days INTEGER DEFAULT 22',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS monthly_report_enabled BOOLEAN DEFAULT false',
+        # company columns
+        'ALTER TABLE company ADD COLUMN IF NOT EXISTS logo_url TEXT',
+        'ALTER TABLE company ADD COLUMN IF NOT EXISTS schedule_enabled BOOLEAN DEFAULT true',
+        'ALTER TABLE company ADD COLUMN IF NOT EXISTS vacation_enabled BOOLEAN DEFAULT true',
+        # email_config columns (table created fresh via init_db after pre-migration drop if needed)
+        'ALTER TABLE email_config ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES company(id)',
+        # data backfill — safe to repeat (WHERE clause is idempotent)
+        "UPDATE \"user\" SET geo_consent = true, geo_consent_date = NOW() WHERE role = 'worker' AND geo_consent IS NULL",
+        # performance indexes
+        'CREATE INDEX IF NOT EXISTS ix_fichaje_user_id ON fichaje (user_id)',
+        'CREATE INDEX IF NOT EXISTS ix_fichaje_status ON fichaje (status)',
+        'CREATE INDEX IF NOT EXISTS ix_fichaje_start_time ON fichaje (start_time)',
+        'CREATE INDEX IF NOT EXISTS ix_user_company_id ON "user" (company_id)',
+        'CREATE INDEX IF NOT EXISTS ix_user_role ON "user" (role)',
+        'CREATE INDEX IF NOT EXISTS ix_admin_access_log_admin_id ON admin_access_log (admin_id)',
+        'CREATE INDEX IF NOT EXISTS ix_admin_access_log_accessed_at ON admin_access_log (accessed_at)',
+        'CREATE INDEX IF NOT EXISTS ix_fichaje_is_deleted_start ON fichaje (is_deleted, start_time DESC)',
+        'CREATE INDEX IF NOT EXISTS ix_fichaje_user_status ON fichaje (user_id, status, start_time DESC)',
+        'CREATE INDEX IF NOT EXISTS ix_worker_schedule_user_date ON worker_schedule (user_id, schedule_date)',
+        # worker_schedule: migrate from (year, day_of_week) → schedule_date
+        'ALTER TABLE worker_schedule ADD COLUMN IF NOT EXISTS schedule_date DATE',
+        'DELETE FROM worker_schedule WHERE schedule_date IS NULL',
+        'ALTER TABLE worker_schedule DROP CONSTRAINT IF EXISTS uq_worker_schedule_user_year_day',
+        'ALTER TABLE worker_schedule DROP COLUMN IF EXISTS year',
+        'ALTER TABLE worker_schedule DROP COLUMN IF EXISTS day_of_week',
+    ]
 
-    # Soft-delete columns for fichaje — isolated block so a failure here never rolls back other migrations
-    async with engine.begin() as conn:
-        await conn.execute(text(
-            'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false'
-        ))
-        await conn.execute(text(
-            'ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP'
-        ))
-
-    # worker_schedule: migrate from (year, day_of_week) → schedule_date
-    # Each step in its own engine.begin() so a failure never aborts the whole transaction.
-    for _sql in [
-        "ALTER TABLE worker_schedule ADD COLUMN IF NOT EXISTS schedule_date DATE",
-        "DELETE FROM worker_schedule WHERE schedule_date IS NULL",
-        "ALTER TABLE worker_schedule DROP CONSTRAINT IF EXISTS uq_worker_schedule_user_year_day",
-        "ALTER TABLE worker_schedule DROP COLUMN IF EXISTS year",
-        "ALTER TABLE worker_schedule DROP COLUMN IF EXISTS day_of_week",
-    ]:
+    for _sql in _migrations:
         try:
             async with engine.begin() as conn:
                 await conn.execute(text(_sql))
-        except Exception:
-            pass
-    # Add new unique constraint (DO $$ cannot run inside a regular transaction on some PG versions)
+        except Exception as exc:
+            # Log but never crash — a migration that already ran or is not needed
+            # on this DB version should not stop the app from starting.
+            print(f"[migrate] SKIP ({exc.__class__.__name__}): {_sql[:80]}")
+
+    # worker_schedule unique constraint — must run outside a transaction on some PG versions
     try:
         async with engine.connect() as conn:
             await conn.execution_options(isolation_level="AUTOCOMMIT").execute(text("""
@@ -165,8 +115,8 @@ async def _run_column_migrations() -> None:
                     END IF;
                 END $$;
             """))
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[migrate] SKIP worker_schedule unique constraint: {exc}")
 
 
 async def _monthly_report_loop() -> None:
@@ -215,7 +165,7 @@ async def _send_monthly_reports(now: "datetime") -> None:
         )
         workers = workers_result.scalars().all()
 
-        for worker in workers:
+        async def _send_one(worker):
             fichajes_result = await session.execute(
                 select(Fichaje).where(
                     Fichaje.user_id == worker.id,
@@ -241,6 +191,9 @@ async def _send_monthly_reports(now: "datetime") -> None:
                 print(f"[monthly-report] Sent to {worker.email}")
             except Exception as exc:
                 print(f"[monthly-report] Failed for {worker.email}: {exc}")
+
+        tasks = [_send_one(w) for w in workers]
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 _DEFAULT_SECRET = "change-me-in-production-very-secret-key"
