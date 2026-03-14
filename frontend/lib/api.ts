@@ -32,8 +32,12 @@ api.interceptors.response.use(
       original._retry = true;
 
       if (isRefreshing) {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
           refreshQueue.push((token) => {
+            if (!token) {
+              reject(error);
+              return;
+            }
             original.headers.Authorization = `Bearer ${token}`;
             resolve(api(original));
           });
@@ -56,6 +60,8 @@ api.interceptors.response.use(
         original.headers.Authorization = `Bearer ${newToken}`;
         return api(original);
       } catch {
+        refreshQueue.forEach((cb) => cb(""));
+        refreshQueue = [];
         if (typeof window !== "undefined") {
           window.__accessToken = undefined;
           window.location.href = "/login";

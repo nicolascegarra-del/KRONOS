@@ -8,7 +8,8 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatDateTime(dateStr: string): string {
-  return format(new Date(dateStr), "dd/MM/yyyy HH:mm", { locale: es });
+  const normalized = dateStr.endsWith("Z") ? dateStr : dateStr + "Z";
+  return format(new Date(normalized), "dd/MM/yyyy HH:mm", { locale: es });
 }
 
 export function formatTime(dateStr: string): string {

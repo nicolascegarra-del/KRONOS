@@ -41,7 +41,7 @@ const statusVariants: Record<Fichaje["status"], "success" | "warning" | "seconda
   finished: "secondary",
 };
 
-export function FichajeCard({ fichaje }: FichajeCardProps) {
+export const FichajeCard = React.memo(function FichajeCard({ fichaje }: FichajeCardProps) {
   return (
     <Card className="w-full">
       <CardContent className="p-4">
@@ -139,4 +139,4 @@ export function FichajeCard({ fichaje }: FichajeCardProps) {
       </CardContent>
     </Card>
   );
-}
+});

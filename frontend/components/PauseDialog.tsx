@@ -14,7 +14,7 @@ import { api } from "@/lib/api";
 import { getCurrentCoords } from "@/lib/geo";
 import { useToast } from "@/components/ui/use-toast";
 
-interface PausaTipo {
+export interface PausaTipo {
   id: string;
   name: string;
 }
@@ -23,25 +23,20 @@ interface PauseDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: (data: any) => void;
+  tipos: PausaTipo[];
 }
 
-export function PauseDialog({ open, onOpenChange, onSuccess }: PauseDialogProps) {
-  const [tipos, setTipos] = useState<PausaTipo[]>([]);
+export function PauseDialog({ open, onOpenChange, onSuccess, tipos }: PauseDialogProps) {
   const [selected, setSelected] = useState("");
   const [loading, setLoading] = useState(false);
-  const [loadingTipos, setLoadingTipos] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Load pause types each time the dialog opens
+  // Reset selection each time the dialog opens
   useEffect(() => {
     if (!open) return;
     setSelected("");
     setError(null);
-    setLoadingTipos(true);
-    api.get<PausaTipo[]>("/pause-types")
-      .then((res) => setTipos(res.data))
-      .finally(() => setLoadingTipos(false));
   }, [open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -75,24 +70,20 @@ export function PauseDialog({ open, onOpenChange, onSuccess }: PauseDialogProps)
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="tipo">Motivo</Label>
-            {loadingTipos ? (
-              <div className="h-10 animate-pulse bg-slate-200 rounded-md" />
-            ) : (
-              <select
-                id="tipo"
-                data-testid="pause-tipo"
-                value={selected}
-                onChange={(e) => setSelected(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              >
-                <option value="">— Selecciona un motivo —</option>
-                {tipos.map((t) => (
-                  <option key={t.id} value={t.name}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            )}
+            <select
+              id="tipo"
+              data-testid="pause-tipo"
+              value={selected}
+              onChange={(e) => setSelected(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              <option value="">— Selecciona un motivo —</option>
+              {tipos.map((t) => (
+                <option key={t.id} value={t.name}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
@@ -108,7 +99,7 @@ export function PauseDialog({ open, onOpenChange, onSuccess }: PauseDialogProps)
             </Button>
             <Button
               type="submit"
-              disabled={loading || !selected || loadingTipos}
+              disabled={loading || !selected}
               className="bg-amber-500 hover:bg-amber-600"
             >
               {loading ? "Pausando..." : "Pausar Jornada"}

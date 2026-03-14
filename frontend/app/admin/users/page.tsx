@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -89,7 +89,6 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
-    api.get<Features>("/companies/features").then((r) => setFeatures(r.data)).catch(() => {});
   }, []);
 
   const openCreate = () => {
@@ -168,6 +167,7 @@ export default function UsersPage() {
     setCalYear(year)
     setCalMonth(month)
     loadScheduleMonth(user.id, year, month)
+    api.get<Features>("/companies/features").then((r) => setFeatures(r.data)).catch(() => {})
     setShowScheduleDialog(true)
   }
 
@@ -209,6 +209,46 @@ export default function UsersPage() {
     await api.put(`/users/${u.id}`, { is_active: !u.is_active });
     fetchUsers();
   };
+
+  // Memoize calendar grid cells — only regenerate when month/year or data change
+  const calendarCells = useMemo(() => {
+    const firstDay = new Date(calYear, calMonth - 1, 1)
+    const daysInMonth = new Date(calYear, calMonth, 0).getDate()
+    const startOffset = (firstDay.getDay() + 6) % 7
+    const cells: React.ReactNode[] = []
+    for (let i = 0; i < startOffset; i++) {
+      cells.push(<div key={`empty-${i}`} />)
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${calYear}-${String(calMonth).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+      const hasSchedule = scheduleMap.has(dateStr)
+      const isSelected = selectedDates.has(dateStr)
+      const sched = scheduleMap.get(dateStr)
+      cells.push(
+        <button
+          key={dateStr}
+          onClick={() => {
+            setSelectedDates(prev => {
+              const next = new Set(prev)
+              if (next.has(dateStr)) next.delete(dateStr)
+              else next.add(dateStr)
+              return next
+            })
+          }}
+          className={[
+            "rounded p-1 text-xs min-h-[3rem] flex flex-col items-center justify-start border transition-colors",
+            isSelected ? "border-primary bg-primary/10" : "border-transparent",
+            hasSchedule && !isSelected ? "bg-blue-50 text-blue-800" : "",
+            !hasSchedule && !isSelected ? "hover:bg-accent" : "",
+          ].join(" ")}
+        >
+          <span className="font-medium">{day}</span>
+          {sched && <span className="text-[10px] leading-tight">{sched.start_time.slice(0,5)}–{sched.end_time.slice(0,5)}</span>}
+        </button>
+      )
+    }
+    return cells
+  }, [calYear, calMonth, scheduleMap, selectedDates])
 
   return (
     <div>
@@ -509,45 +549,7 @@ export default function UsersPage() {
                 {["L","M","X","J","V","S","D"].map(d => <div key={d}>{d}</div>)}
               </div>
               <div className="grid grid-cols-7 gap-1">
-                {(() => {
-                  const firstDay = new Date(calYear, calMonth - 1, 1)
-                  const daysInMonth = new Date(calYear, calMonth, 0).getDate()
-                  // Monday=0 offset
-                  const startOffset = (firstDay.getDay() + 6) % 7
-                  const cells: React.ReactNode[] = []
-                  for (let i = 0; i < startOffset; i++) {
-                    cells.push(<div key={`empty-${i}`} />)
-                  }
-                  for (let day = 1; day <= daysInMonth; day++) {
-                    const dateStr = `${calYear}-${String(calMonth).padStart(2,'0')}-${String(day).padStart(2,'0')}`
-                    const hasSchedule = scheduleMap.has(dateStr)
-                    const isSelected = selectedDates.has(dateStr)
-                    const sched = scheduleMap.get(dateStr)
-                    cells.push(
-                      <button
-                        key={dateStr}
-                        onClick={() => {
-                          setSelectedDates(prev => {
-                            const next = new Set(prev)
-                            if (next.has(dateStr)) next.delete(dateStr)
-                            else next.add(dateStr)
-                            return next
-                          })
-                        }}
-                        className={[
-                          "rounded p-1 text-xs min-h-[3rem] flex flex-col items-center justify-start border transition-colors",
-                          isSelected ? "border-primary bg-primary/10" : "border-transparent",
-                          hasSchedule && !isSelected ? "bg-blue-50 text-blue-800" : "",
-                          !hasSchedule && !isSelected ? "hover:bg-accent" : "",
-                        ].join(" ")}
-                      >
-                        <span className="font-medium">{day}</span>
-                        {sched && <span className="text-[10px] leading-tight">{sched.start_time.slice(0,5)}–{sched.end_time.slice(0,5)}</span>}
-                      </button>
-                    )
-                  }
-                  return cells
-                })()}
+                {calendarCells}
               </div>
 
               {/* Bulk toolbar */}

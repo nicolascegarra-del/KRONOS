@@ -16,7 +16,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { ModalidadBadge } from "@/components/ModalidadBadge";
 import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
-import { minutesToHoursLabel } from "@/lib/utils";
+import { formatDateTime, minutesToHoursLabel } from "@/lib/utils";
 
 interface PausaAdmin {
   id: string;
@@ -175,7 +175,7 @@ interface EditForm {
 
 function fmtDatetime(iso?: string): string {
   if (!iso) return "—";
-  return format(new Date(iso.endsWith("Z") ? iso : iso + "Z"), "dd/MM/yyyy HH:mm");
+  return formatDateTime(iso);
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -214,8 +214,12 @@ function toInputDatetime(iso?: string): string {
   return iso.slice(0, 16);
 }
 
+const PAGE_SIZE = 100;
+
 export default function AdminFichajesPage() {
   const [fichajes, setFichajes] = useState<FichajeAdmin[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fromDate, setFromDate] = useState("");
@@ -240,7 +244,7 @@ export default function AdminFichajesPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const fetchFichajes = async () => {
+  const fetchFichajes = async (pageNum = page) => {
     setLoading(true);
     setError(null);
     try {
@@ -248,8 +252,11 @@ export default function AdminFichajesPage() {
       if (fromDate) params.set("from_date", fromDate);
       if (toDate) params.set("to_date", toDate);
       if (statusFilter) params.set("status", statusFilter);
-      const res = await api.get<FichajeAdmin[]>(`/fichajes/admin?${params}`);
-      setFichajes(res.data);
+      params.set("limit", String(PAGE_SIZE));
+      params.set("offset", String(pageNum * PAGE_SIZE));
+      const res = await api.get<{ items: FichajeAdmin[]; total: number }>(`/fichajes/admin?${params}`);
+      setFichajes(res.data.items);
+      setTotal(res.data.total);
     } catch {
       setError("Error al cargar los fichajes");
     } finally {
@@ -258,7 +265,7 @@ export default function AdminFichajesPage() {
   };
 
   useEffect(() => {
-    fetchFichajes();
+    fetchFichajes(0);
   }, []);
 
   const handleFinalize = async (id: string) => {
@@ -361,7 +368,7 @@ export default function AdminFichajesPage() {
               <option value="finished">Finalizado</option>
             </select>
           </div>
-          <Button onClick={fetchFichajes} disabled={loading} className="flex items-center gap-2">
+          <Button onClick={() => { setPage(0); fetchFichajes(0); }} disabled={loading} className="flex items-center gap-2">
             <Search className="w-4 h-4" />
             {loading ? "Cargando..." : "Buscar"}
           </Button>
@@ -511,6 +518,31 @@ export default function AdminFichajesPage() {
           </table>
         </div>
       </div>
+
+      {/* Pagination */}
+      {total > PAGE_SIZE && (
+        <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+          <span>Mostrando {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} de {total}</span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page === 0 || loading}
+              onClick={() => { const p = page - 1; setPage(p); fetchFichajes(p); }}
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={(page + 1) * PAGE_SIZE >= total || loading}
+              onClick={() => { const p = page + 1; setPage(p); fetchFichajes(p); }}
+            >
+              Siguiente
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Geo modal */}
       {geoTarget && <GeoModal fichaje={geoTarget} onClose={() => setGeoTarget(null)} />}

@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { getCurrentCoords } from "@/lib/geo";
 import { useAuthStore } from "@/store/auth";
-import { PauseDialog } from "./PauseDialog";
+import { PauseDialog, PausaTipo } from "./PauseDialog";
 import { Play, Square, Coffee, RotateCcw } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -76,12 +76,18 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
   const [loading, setLoading] = useState(false);
   const [fichaje, setFichaje] = useState<Fichaje | null>(null);
   const [pauseOpen, setPauseOpen] = useState(false);
+  const [pauseTipos, setPauseTipos] = useState<PausaTipo[]>([]);
   const [elapsed, setElapsed] = useState("00:00:00");
   const [error, setError] = useState<string | null>(null);
   // RGPD: local geo_consent mirrors JWT value; null means not yet asked
   const [geoConsent, setGeoConsent] = useState<boolean | null>(user?.geo_consent ?? null);
   const [consentOpen, setConsentOpen] = useState(false);
   const [consentLoading, setConsentLoading] = useState(false);
+
+  // Fetch pause types once on mount (cached for entire session)
+  useEffect(() => {
+    api.get<PausaTipo[]>("/pause-types").then((res) => setPauseTipos(res.data)).catch(() => {});
+  }, []);
 
   // Poll for active fichaje on mount
   useEffect(() => {
@@ -349,6 +355,7 @@ export function ShiftButton({ onStatusChange }: ShiftButtonProps) {
         open={pauseOpen}
         onOpenChange={setPauseOpen}
         onSuccess={handlePauseSuccess}
+        tipos={pauseTipos}
       />
 
       {/* RGPD Art. 7 — Geolocation consent dialog */}
