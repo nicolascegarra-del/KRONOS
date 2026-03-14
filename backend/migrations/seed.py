@@ -62,7 +62,8 @@ SEED_USERS = [
 async def run_migrations() -> None:
     """
     Apply schema changes to existing tables that create_all won't touch.
-    Safe to run multiple times (idempotent).
+    Safe to run multiple times (idempotent). Each step is individually
+    guarded so a single failure never prevents the app from starting.
     """
     is_postgres = "postgresql" in str(engine.url)
 
@@ -70,79 +71,63 @@ async def run_migrations() -> None:
         # PostgreSQL stores Python enums as native ENUM types.
         # ALTER TYPE ... ADD VALUE cannot run inside a transaction,
         # so we use AUTOCOMMIT isolation level.
-        async with engine.execution_options(isolation_level="AUTOCOMMIT").connect() as conn:
-            await conn.execute(
-                text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'superadmin'")
-            )
-            print("[migrate] userrole enum updated.")
+        # lock_timeout prevents an indefinite hang if another session holds
+        # an exclusive lock on the type (e.g. lingering connections on redeploy).
+        try:
+            async with engine.execution_options(isolation_level="AUTOCOMMIT").connect() as conn:
+                await conn.execute(text("SET lock_timeout = '5s'"))
+                await conn.execute(
+                    text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'superadmin'")
+                )
+                print("[migrate] userrole enum updated.")
+        except Exception as exc:
+            print(f"[migrate] SKIP userrole enum ({exc.__class__.__name__}): {exc}")
 
     # Create new tables (company, etc.) — skips tables that already exist
-    async with engine.begin() as conn:
-        await conn.run_sync(lambda c: SQLModel.metadata.create_all(c, checkfirst=True))
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(lambda c: SQLModel.metadata.create_all(c, checkfirst=True))
+    except Exception as exc:
+        print(f"[migrate] SKIP create_all ({exc.__class__.__name__}): {exc}")
 
     if is_postgres:
-        # Add company_id FK column to user table if missing
-        async with engine.begin() as conn:
-            await conn.execute(text("""
-                ALTER TABLE "user"
-                ADD COLUMN IF NOT EXISTS company_id UUID
-                REFERENCES company(id)
-            """))
-
-        # Add geo columns to fichaje if missing
-        async with engine.begin() as conn:
-            for col in ("start_lat", "start_lng", "end_lat", "end_lng"):
-                await conn.execute(text(f"""
-                    ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS {col} DOUBLE PRECISION
-                """))
-
-        # Add geo columns to pausa if missing
-        async with engine.begin() as conn:
-            for col in ("start_lat", "start_lng", "end_lat", "end_lng"):
-                await conn.execute(text(f"""
-                    ALTER TABLE pausa ADD COLUMN IF NOT EXISTS {col} DOUBLE PRECISION
-                """))
-
-        # Add out_of_range column to fichaje if missing
-        async with engine.begin() as conn:
-            await conn.execute(text("""
-                ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS out_of_range BOOLEAN
-            """))
-
-        # Add auto_close columns to app_settings if missing
-        async with engine.begin() as conn:
-            await conn.execute(text("""
-                ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS auto_close_enabled BOOLEAN DEFAULT FALSE
-            """))
-            await conn.execute(text("""
-                ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS auto_close_hours INTEGER DEFAULT 12
-            """))
-
-        # Add geo_enabled column to company if missing
-        async with engine.begin() as conn:
-            await conn.execute(text("""
-                ALTER TABLE company ADD COLUMN IF NOT EXISTS geo_enabled BOOLEAN NOT NULL DEFAULT TRUE
-            """))
-
-        # Add billing/subscription columns to company if missing
-        async with engine.begin() as conn:
-            for col_def in (
-                "nif VARCHAR",
-                "address VARCHAR",
-                "city VARCHAR",
-                "postal_code VARCHAR",
-                "phone VARCHAR",
-                "billing_email VARCHAR",
-                "subscription_plan VARCHAR",
-                "subscription_price DOUBLE PRECISION",
-                "subscription_discount DOUBLE PRECISION DEFAULT 0",
-                "subscription_start TIMESTAMP",
-                "subscription_end TIMESTAMP",
-            ):
-                col_name = col_def.split()[0]
-                await conn.execute(text(f"""
-                    ALTER TABLE company ADD COLUMN IF NOT EXISTS {col_name} {" ".join(col_def.split()[1:])}
-                """))
+        _pg_migrations = [
+            # user columns
+            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES company(id)',
+            # fichaje geo columns
+            "ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS start_lat DOUBLE PRECISION",
+            "ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS start_lng DOUBLE PRECISION",
+            "ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS end_lat DOUBLE PRECISION",
+            "ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS end_lng DOUBLE PRECISION",
+            "ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS out_of_range BOOLEAN",
+            # pausa geo columns
+            "ALTER TABLE pausa ADD COLUMN IF NOT EXISTS start_lat DOUBLE PRECISION",
+            "ALTER TABLE pausa ADD COLUMN IF NOT EXISTS start_lng DOUBLE PRECISION",
+            "ALTER TABLE pausa ADD COLUMN IF NOT EXISTS end_lat DOUBLE PRECISION",
+            "ALTER TABLE pausa ADD COLUMN IF NOT EXISTS end_lng DOUBLE PRECISION",
+            # app_settings columns
+            "ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS auto_close_enabled BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS auto_close_hours INTEGER DEFAULT 12",
+            # company columns
+            "ALTER TABLE company ADD COLUMN IF NOT EXISTS geo_enabled BOOLEAN NOT NULL DEFAULT TRUE",
+            "ALTER TABLE company ADD COLUMN IF NOT EXISTS nif VARCHAR",
+            "ALTER TABLE company ADD COLUMN IF NOT EXISTS address VARCHAR",
+            "ALTER TABLE company ADD COLUMN IF NOT EXISTS city VARCHAR",
+            "ALTER TABLE company ADD COLUMN IF NOT EXISTS postal_code VARCHAR",
+            "ALTER TABLE company ADD COLUMN IF NOT EXISTS phone VARCHAR",
+            "ALTER TABLE company ADD COLUMN IF NOT EXISTS billing_email VARCHAR",
+            "ALTER TABLE company ADD COLUMN IF NOT EXISTS subscription_plan VARCHAR",
+            "ALTER TABLE company ADD COLUMN IF NOT EXISTS subscription_price DOUBLE PRECISION",
+            "ALTER TABLE company ADD COLUMN IF NOT EXISTS subscription_discount DOUBLE PRECISION DEFAULT 0",
+            "ALTER TABLE company ADD COLUMN IF NOT EXISTS subscription_start TIMESTAMP",
+            "ALTER TABLE company ADD COLUMN IF NOT EXISTS subscription_end TIMESTAMP",
+        ]
+        for _sql in _pg_migrations:
+            try:
+                async with engine.begin() as conn:
+                    await conn.execute(text(_sql))
+            except Exception as exc:
+                print(f"[migrate] SKIP ({exc.__class__.__name__}): {_sql[:80]}")
 
     print("[migrate] Schema up to date.")
 
