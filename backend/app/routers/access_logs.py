@@ -1,11 +1,13 @@
+import csv
+import io
 from datetime import date, datetime
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
@@ -21,6 +23,7 @@ class AccessLogRead(BaseModel):
     admin_id: UUID
     admin_email: Optional[str] = None
     admin_name: Optional[str] = None
+    company_name: Optional[str] = None
     action: str
     target_user_id: Optional[UUID] = None
     accessed_at: datetime
@@ -29,51 +32,120 @@ class AccessLogRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
-@router.get("", response_model=list[AccessLogRead])
+class AccessLogListResponse(BaseModel):
+    items: List[AccessLogRead]
+    total: int
+
+
+ACTION_LABELS = {
+    "VIEW_FICHAJES": "Ver fichajes",
+    "EXPORT_REPORT": "Exportar informe",
+    "EDIT_FICHAJE": "Editar fichaje",
+}
+
+
+def _build_query(
+    from_date: Optional[date],
+    to_date: Optional[date],
+    company_id: Optional[UUID],
+    admin_id: Optional[UUID],
+):
+    """Base query joining AdminAccessLog with User (and optionally Company)."""
+    from app.models.company import Company
+
+    q = (
+        select(AdminAccessLog, User, Company)
+        .join(User, AdminAccessLog.admin_id == User.id, isouter=True)
+        .join(Company, User.company_id == Company.id, isouter=True)
+    )
+    if from_date:
+        q = q.where(AdminAccessLog.accessed_at >= datetime.combine(from_date, datetime.min.time()))
+    if to_date:
+        q = q.where(AdminAccessLog.accessed_at <= datetime.combine(to_date, datetime.max.time()))
+    if company_id:
+        q = q.where(User.company_id == company_id)
+    if admin_id:
+        q = q.where(AdminAccessLog.admin_id == admin_id)
+    return q
+
+
+@router.get("", response_model=AccessLogListResponse)
 async def list_access_logs(
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
     company_id: Optional[UUID] = None,
+    admin_id: Optional[UUID] = None,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
     _superadmin: User = Depends(require_superadmin),
     session: AsyncSession = Depends(get_session),
 ):
-    query = (
-        select(AdminAccessLog)
+    base_q = _build_query(from_date, to_date, company_id, admin_id)
+
+    # Total count
+    count_q = select(func.count()).select_from(base_q.subquery())
+    total = (await session.execute(count_q)).scalar_one()
+
+    # Paginated rows
+    rows_q = (
+        base_q
         .order_by(AdminAccessLog.accessed_at.desc())
-        .limit(500)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
     )
-    if from_date:
-        query = query.where(
-            AdminAccessLog.accessed_at >= datetime.combine(from_date, datetime.min.time())
-        )
-    if to_date:
-        query = query.where(
-            AdminAccessLog.accessed_at <= datetime.combine(to_date, datetime.max.time())
-        )
-    result = await session.execute(query)
-    logs = result.scalars().all()
+    rows = (await session.execute(rows_q)).all()
 
-    # Enrich with admin user info
-    admin_ids = list({log.admin_id for log in logs})
-    users_result = await session.execute(
-        select(User).where(User.id.in_(admin_ids))
-    )
-    users_map = {u.id: u for u in users_result.scalars().all()}
-
-    enriched = []
-    for log in logs:
-        u = users_map.get(log.admin_id)
-        # Filter by company if requested
-        if company_id and u and u.company_id != company_id:
-            continue
-        enriched.append(AccessLogRead(
+    items = [
+        AccessLogRead(
             id=log.id,
             admin_id=log.admin_id,
-            admin_email=u.email if u else None,
-            admin_name=u.full_name if u else None,
+            admin_email=user.email if user else None,
+            admin_name=user.full_name if user else None,
+            company_name=company.name if company else None,
             action=log.action,
             target_user_id=log.target_user_id,
             accessed_at=log.accessed_at,
             details=log.details,
-        ))
-    return enriched
+        )
+        for log, user, company in rows
+    ]
+    return AccessLogListResponse(items=items, total=total)
+
+
+@router.get("/export.csv")
+async def export_access_logs_csv(
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    company_id: Optional[UUID] = None,
+    admin_id: Optional[UUID] = None,
+    _superadmin: User = Depends(require_superadmin),
+    session: AsyncSession = Depends(get_session),
+):
+    q = (
+        _build_query(from_date, to_date, company_id, admin_id)
+        .order_by(AdminAccessLog.accessed_at.desc())
+        .limit(10000)
+    )
+    rows = (await session.execute(q)).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Fecha/Hora", "Admin", "Email", "Empresa", "Acción", "Detalles"])
+
+    for log, user, company in rows:
+        writer.writerow([
+            log.accessed_at.strftime("%Y-%m-%d %H:%M:%S"),
+            user.full_name if user else "",
+            user.email if user else "",
+            company.name if company else "",
+            ACTION_LABELS.get(log.action, log.action),
+            log.details or "",
+        ])
+
+    output.seek(0)
+    filename = f"access_logs_{date.today().isoformat()}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
