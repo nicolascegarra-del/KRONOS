@@ -18,7 +18,7 @@ services:
 
   backend:
     build: ./backend
-    restart: unless-stopped
+    restart: always
     depends_on:
       db:
         condition: service_healthy
@@ -27,7 +27,7 @@ services:
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
       CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3000"]}'
       APP_ENV: ${APP_ENV:-production}
-      APP_URL: ${APP_URL:-http://localhost:3000}
+      APP_URL: ${APP_URL:-https://kronos.klyp.es}
     expose:
       - "8000"
     healthcheck:
@@ -35,7 +35,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 8
-      start_period: 60s
+      start_period: 30s
     networks:
       - default
       - coolify
@@ -45,7 +45,7 @@ services:
       context: ./frontend
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-    restart: unless-stopped
+    restart: always
     depends_on:
       backend:
         condition: service_healthy
@@ -56,7 +56,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 60s
+      start_period: 30s
     networks:
       - default
       - coolify
@@ -68,3 +68,4 @@ networks:
   default:
   coolify:
     external: true
+    name: coolify
