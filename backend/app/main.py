@@ -305,4 +305,18 @@ app.include_router(absence.router)
 
 @app.get("/health")
 async def health():
+    """Liveness check: verifies the HTTP server AND the DB connection are up."""
+    from sqlalchemy import text
+    from app.database import engine
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+    except Exception as exc:
+        from fastapi import Response
+        import json
+        return Response(
+            content=json.dumps({"status": "error", "detail": "database unreachable"}),
+            status_code=503,
+            media_type="application/json",
+        )
     return {"status": "ok"}

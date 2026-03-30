@@ -123,9 +123,9 @@ async def test_admin_list_fichajes(client: AsyncClient, admin_user, worker_user)
     resp = await client.get("/fichajes/admin", headers={"Authorization": f"Bearer {admin_token}"})
     assert resp.status_code == 200
     data = resp.json()
-    assert len(data) >= 1
-    assert "user" in data[0]
-    assert data[0]["user"]["email"] == "worker@test.com"
+    assert data["total"] >= 1
+    assert "user" in data["items"][0]
+    assert data["items"][0]["user"]["email"] == "worker@test.com"
 
 
 @pytest.mark.asyncio
@@ -306,9 +306,9 @@ async def test_admin_list_includes_modalidad(client: AsyncClient, admin_user, wo
     resp = await client.get("/fichajes/admin", headers={"Authorization": f"Bearer {admin_token}"})
     assert resp.status_code == 200
     data = resp.json()
-    assert len(data) >= 1
-    assert "modalidad" in data[0]
-    assert data[0]["modalidad"] == "teletrabajo"
+    assert data["total"] >= 1
+    assert "modalidad" in data["items"][0]
+    assert data["items"][0]["modalidad"] == "teletrabajo"
 
 
 # ---------------------------------------------------------------------------

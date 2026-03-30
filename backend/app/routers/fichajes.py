@@ -123,42 +123,47 @@ async def start_fichaje(
                 in_range = is_within_any_work_center(body.coords.lat, body.coords.lng, work_centers)
                 fichaje.out_of_range = not in_range
                 if not in_range:
-                    asyncio.create_task(_notify_out_of_range(current_user, session))
+                    asyncio.create_task(_notify_out_of_range(current_user, current_user.company_id))
 
     session.add(fichaje)
     await session.commit()
     return await _reload(session, fichaje.id)
 
 
-async def _notify_out_of_range(worker: User, session: AsyncSession) -> None:
-    """Send an email to all company admins when a worker clocks in out of range."""
+async def _notify_out_of_range(worker: User, company_id: UUID) -> None:
+    """Send an email to all company admins when a worker clocks in out of range.
+
+    Uses its own DB session — never reuse the request session in a background task.
+    """
     try:
         from app.services.email_service import send_email
         from app.routers.settings import _get_email_config
-        config = await _get_email_config(session, worker.company_id)
-        if not config or not config.smtp_host:
-            return
+        from app.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            config = await _get_email_config(session, company_id)
+            if not config or not config.smtp_host:
+                return
 
-        admin_result = await session.execute(
-            select(User).where(
-                User.company_id == worker.company_id,
-                User.role == UserRole.admin,
-                User.is_active == True,
+            admin_result = await session.execute(
+                select(User).where(
+                    User.company_id == company_id,
+                    User.role == UserRole.admin,
+                    User.is_active == True,
+                )
             )
-        )
-        admins = admin_result.scalars().all()
+            admins = admin_result.scalars().all()
 
-        subject = f"⚠️ Trabajador fuera de rango — {worker.full_name}"
-        body = f"""
-        <p>El trabajador <strong>{worker.full_name}</strong> ({worker.email}) ha fichado
-        su inicio de jornada fuera de los centros de trabajo configurados.</p>
-        <p>Revisa el panel de fichajes para más detalles.</p>
-        """
-        for admin in admins:
-            try:
-                await send_email(config, admin.email, subject, body)
-            except Exception:
-                pass
+            subject = f"⚠️ Trabajador fuera de rango — {worker.full_name}"
+            body = f"""
+            <p>El trabajador <strong>{worker.full_name}</strong> ({worker.email}) ha fichado
+            su inicio de jornada fuera de los centros de trabajo configurados.</p>
+            <p>Revisa el panel de fichajes para más detalles.</p>
+            """
+            for admin in admins:
+                try:
+                    await send_email(config, admin.email, subject, body)
+                except Exception:
+                    pass
     except Exception:
         pass
 
