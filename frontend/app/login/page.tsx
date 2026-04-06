@@ -182,7 +182,7 @@ export default function LoginPage() {
           <img
             src="/logo_kronos_white.png"
             alt="KRONOS by Klyp"
-            className="h-12 w-auto object-contain"
+            className="w-full max-w-[260px] h-auto object-contain"
           />
         </div>
 
@@ -238,7 +238,7 @@ export default function LoginPage() {
           <img
             src="/logo_kronos_white.png"
             alt="KRONOS by Klyp"
-            className="h-11 w-auto object-contain mb-4"
+            className="w-full max-w-[220px] h-auto object-contain mb-4"
           />
           <p className="text-sm font-semibold" style={{ color: "#E8EDF5", opacity: 0.9 }}>
             Plataforma integral para RRHH
