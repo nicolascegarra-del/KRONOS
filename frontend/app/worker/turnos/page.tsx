@@ -6,6 +6,8 @@ interface ScheduleDay {
   schedule_date: string
   start_time: string | null
   end_time: string | null
+  start_time_2?: string | null
+  end_time_2?: string | null
 }
 
 export default function TurnosPage() {
@@ -36,7 +38,13 @@ export default function TurnosPage() {
     if (!d.start_time || !d.end_time) return acc
     const [sh, sm] = d.start_time.split(":").map(Number)
     const [eh, em] = d.end_time.split(":").map(Number)
-    return acc + (eh * 60 + em) - (sh * 60 + sm)
+    let mins = (eh * 60 + em) - (sh * 60 + sm)
+    if (d.start_time_2 && d.end_time_2) {
+      const [sh2, sm2] = d.start_time_2.split(":").map(Number)
+      const [eh2, em2] = d.end_time_2.split(":").map(Number)
+      mins += (eh2 * 60 + em2) - (sh2 * 60 + sm2)
+    }
+    return acc + mins
   }, 0)
   const totalHours = Math.floor(totalMinutes / 60)
   const totalMins = totalMinutes % 60
@@ -88,6 +96,11 @@ export default function TurnosPage() {
                   {sched?.start_time && sched?.end_time && (
                     <span className="text-[10px] leading-tight text-center">
                       {sched.start_time.slice(0,5)}–{sched.end_time.slice(0,5)}
+                    </span>
+                  )}
+                  {sched?.start_time_2 && sched?.end_time_2 && (
+                    <span className="text-[10px] leading-tight text-center text-blue-600">
+                      {sched.start_time_2.slice(0,5)}–{sched.end_time_2.slice(0,5)}
                     </span>
                   )}
                 </div>

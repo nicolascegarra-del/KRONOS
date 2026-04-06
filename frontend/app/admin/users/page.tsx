@@ -73,10 +73,13 @@ export default function UsersPage() {
   const [selectedScheduleUser, setSelectedScheduleUser] = useState<User | null>(null);
   const [calYear, setCalYear] = useState(new Date().getFullYear())
   const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1) // 1-based
-  const [scheduleMap, setScheduleMap] = useState<Map<string, { start_time: string; end_time: string }>>(new Map())
+  const [scheduleMap, setScheduleMap] = useState<Map<string, { start_time: string; end_time: string; start_time_2?: string; end_time_2?: string }>>(new Map())
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set())
   const [bulkStart, setBulkStart] = useState("09:00")
   const [bulkEnd, setBulkEnd] = useState("17:00")
+  const [splitShift, setSplitShift] = useState(false)
+  const [bulkStart2, setBulkStart2] = useState("17:00")
+  const [bulkEnd2, setBulkEnd2] = useState("20:00")
   const [scheduleLoading, setScheduleLoading] = useState(false)
 
   const fetchUsers = () => {
@@ -117,10 +120,15 @@ export default function UsersPage() {
     setScheduleLoading(true)
     try {
       const res = await api.get(`/users/${userId}/schedule`, { params: { year, month } })
-      const map = new Map<string, { start_time: string; end_time: string }>()
+      const map = new Map<string, { start_time: string; end_time: string; start_time_2?: string; end_time_2?: string }>()
       for (const day of res.data) {
         if (day.start_time && day.end_time) {
-          map.set(day.schedule_date, { start_time: day.start_time.slice(0,5), end_time: day.end_time.slice(0,5) })
+          map.set(day.schedule_date, {
+            start_time: day.start_time.slice(0,5),
+            end_time: day.end_time.slice(0,5),
+            start_time_2: day.start_time_2 ? day.start_time_2.slice(0,5) : undefined,
+            end_time_2: day.end_time_2 ? day.end_time_2.slice(0,5) : undefined,
+          })
         }
       }
       setScheduleMap(map)
@@ -243,7 +251,10 @@ export default function UsersPage() {
           ].join(" ")}
         >
           <span className="font-medium">{day}</span>
-          {sched && <span className="text-[10px] leading-tight">{sched.start_time.slice(0,5)}–{sched.end_time.slice(0,5)}</span>}
+          {sched && <span className="text-[10px] leading-tight">{sched.start_time}–{sched.end_time}</span>}
+          {sched?.start_time_2 && sched?.end_time_2 && (
+            <span className="text-[10px] leading-tight text-blue-600">{sched.start_time_2}–{sched.end_time_2}</span>
+          )}
         </button>
       )
     }
@@ -561,12 +572,43 @@ export default function UsersPage() {
                     <input type="time" value={bulkStart} onChange={e => setBulkStart(e.target.value)} className="border rounded px-2 py-1 text-sm" />
                     <label className="text-xs text-muted-foreground">Salida</label>
                     <input type="time" value={bulkEnd} onChange={e => setBulkEnd(e.target.value)} className="border rounded px-2 py-1 text-sm" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="split-shift-check"
+                      checked={splitShift}
+                      onChange={e => setSplitShift(e.target.checked)}
+                      className="rounded"
+                    />
+                    <label htmlFor="split-shift-check" className="text-xs text-muted-foreground cursor-pointer">Horario partido (2º turno)</label>
+                  </div>
+                  {splitShift && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="text-xs text-blue-600">Entrada 2</label>
+                      <input type="time" value={bulkStart2} onChange={e => setBulkStart2(e.target.value)} className="border rounded px-2 py-1 text-sm border-blue-300" />
+                      <label className="text-xs text-blue-600">Salida 2</label>
+                      <input type="time" value={bulkEnd2} onChange={e => setBulkEnd2(e.target.value)} className="border rounded px-2 py-1 text-sm border-blue-300" />
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
                     <Button size="sm" onClick={async () => {
                       if (!selectedScheduleUser) return
-                      const days = Array.from(selectedDates).map(d => ({ schedule_date: d, start_time: bulkStart + ":00", end_time: bulkEnd + ":00" }))
+                      const days = Array.from(selectedDates).map(d => ({
+                        schedule_date: d,
+                        start_time: bulkStart + ":00",
+                        end_time: bulkEnd + ":00",
+                        start_time_2: splitShift ? bulkStart2 + ":00" : null,
+                        end_time_2: splitShift ? bulkEnd2 + ":00" : null,
+                      }))
                       await api.put(`/users/${selectedScheduleUser.id}/schedule`, { days })
                       const next = new Map(scheduleMap)
-                      Array.from(selectedDates).forEach(d => next.set(d, { start_time: bulkStart, end_time: bulkEnd }))
+                      Array.from(selectedDates).forEach(d => next.set(d, {
+                        start_time: bulkStart,
+                        end_time: bulkEnd,
+                        start_time_2: splitShift ? bulkStart2 : undefined,
+                        end_time_2: splitShift ? bulkEnd2 : undefined,
+                      }))
                       setScheduleMap(next)
                       setSelectedDates(new Set())
                     }}>Aplicar</Button>

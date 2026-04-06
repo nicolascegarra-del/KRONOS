@@ -41,6 +41,8 @@ async def get_my_schedule(
             schedule_date=r.schedule_date,
             start_time=r.start_time,
             end_time=r.end_time,
+            start_time_2=r.start_time_2,
+            end_time_2=r.end_time_2,
         )
         for r in rows
     ]
@@ -76,6 +78,8 @@ async def get_worker_schedule(
             schedule_date=r.schedule_date,
             start_time=r.start_time,
             end_time=r.end_time,
+            start_time_2=r.start_time_2,
+            end_time_2=r.end_time_2,
         )
         for r in rows
     ]
@@ -115,6 +119,8 @@ async def upsert_worker_schedule(
             if existing:
                 existing.start_time = day.start_time
                 existing.end_time = day.end_time
+                existing.start_time_2 = day.start_time_2
+                existing.end_time_2 = day.end_time_2
                 session.add(existing)
             else:
                 new_row = WorkerSchedule(
@@ -122,6 +128,8 @@ async def upsert_worker_schedule(
                     schedule_date=day.schedule_date,
                     start_time=day.start_time,
                     end_time=day.end_time,
+                    start_time_2=day.start_time_2,
+                    end_time_2=day.end_time_2,
                 )
                 session.add(new_row)
             saved.append(day)

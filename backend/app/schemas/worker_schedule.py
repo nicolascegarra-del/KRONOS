@@ -7,6 +7,8 @@ class WorkerScheduleDay(BaseModel):
     schedule_date: date
     start_time: Optional[time] = None
     end_time: Optional[time] = None
+    start_time_2: Optional[time] = None
+    end_time_2: Optional[time] = None
 
 
 class WorkerScheduleUpdate(BaseModel):
