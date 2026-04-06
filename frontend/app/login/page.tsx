@@ -6,7 +6,54 @@ import { useAuthStore } from "@/store/auth";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { Smartphone, ChevronDown, ChevronUp, ShieldCheck, AlertCircle, UserX, Lock } from "lucide-react";
+import {
+  Clock,
+  MapPin,
+  CalendarDays,
+  CalendarRange,
+  FileText,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  AlertCircle,
+  UserX,
+  Lock,
+  Smartphone,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
+
+// ─── Feature list ────────────────────────────────────────────────────────────
+
+const FEATURES = [
+  {
+    icon: Clock,
+    title: "Control de fichajes",
+    desc: "Registro preciso de entrada y salida en tiempo real",
+  },
+  {
+    icon: MapPin,
+    title: "Geolocalización",
+    desc: "Verificación de ubicación al marcar presencia",
+  },
+  {
+    icon: CalendarDays,
+    title: "Gestión de vacaciones",
+    desc: "Solicitud y aprobación de días de descanso",
+  },
+  {
+    icon: CalendarRange,
+    title: "Calendario de turnos",
+    desc: "Planificación y gestión de turnos de trabajo",
+  },
+  {
+    icon: FileText,
+    title: "Envío de documentos",
+    desc: "Distribución de nóminas y documentos a trabajadores",
+  },
+];
+
+// ─── PWA install instructions ────────────────────────────────────────────────
 
 function PwaInstructions() {
   const [open, setOpen] = useState(false);
@@ -58,12 +105,18 @@ function PwaInstructions() {
   );
 }
 
+// ─── Login page ───────────────────────────────────────────────────────────────
+
 export default function LoginPage() {
   const router = useRouter();
   const { login, isLoading } = useAuthStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<{ message: string; type: "disabled" | "notfound" | "generic" } | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<{
+    message: string;
+    type: "disabled" | "notfound" | "generic";
+  } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,40 +135,122 @@ export default function LoginPage() {
       const detail: string = e.response?.data?.detail ?? "";
       const status: number = e.response?.status ?? 0;
       if (status === 403 || detail.toLowerCase().includes("desactivada")) {
-        setError({ message: "Tu cuenta está desactivada. Contacta con tu administrador.", type: "disabled" });
-      } else if (detail.toLowerCase().includes("no existe") || detail.toLowerCase().includes("ninguna cuenta")) {
-        setError({ message: "No existe ninguna cuenta con ese email.", type: "notfound" });
+        setError({
+          message: "Tu cuenta está desactivada. Contacta con tu administrador.",
+          type: "disabled",
+        });
+      } else if (
+        detail.toLowerCase().includes("no existe") ||
+        detail.toLowerCase().includes("ninguna cuenta")
+      ) {
+        setError({
+          message: "No existe ninguna cuenta con ese email.",
+          type: "notfound",
+        });
       } else {
-        setError({ message: detail || "Credenciales incorrectas. Inténtalo de nuevo.", type: "generic" });
+        setError({
+          message: detail || "Credenciales incorrectas. Inténtalo de nuevo.",
+          type: "generic",
+        });
       }
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 p-4">
-      {/* Card */}
-      <div className="w-full max-w-sm">
-        {/* Brand header strip */}
-        <div className="h-1 w-full bg-gradient-to-r from-slate-600 via-slate-400 to-slate-600 rounded-t-2xl" />
+    <div className="min-h-screen flex flex-col lg:flex-row">
 
-        <div className="bg-white rounded-b-2xl shadow-2xl overflow-hidden">
-          {/* Logo area */}
-          <div className="px-8 pt-8 pb-2 text-center">
-            <img
-              src="/logo.png"
-              alt="Kronos"
-              className="w-full max-w-[220px] h-auto object-contain mx-auto"
-            />
-            <p className="mt-3 text-sm text-slate-400 font-medium tracking-wide">
-              Inicia sesión para continuar
+      {/* ── Left panel: branding ─────────────────────────────────────────── */}
+      <div
+        className="relative flex flex-col justify-between overflow-hidden
+                   lg:w-[55%] lg:min-h-screen
+                   px-8 py-8 lg:px-14 lg:py-12"
+        style={{ backgroundColor: "#051937" }}
+      >
+        {/* Decorative circles */}
+        <div
+          className="absolute -top-24 -right-24 w-72 h-72 rounded-full opacity-10"
+          style={{ backgroundColor: "#2E6DB4" }}
+          aria-hidden="true"
+        />
+        <div
+          className="absolute -bottom-28 -left-20 w-80 h-80 rounded-full opacity-10"
+          style={{ backgroundColor: "#2E6DB4" }}
+          aria-hidden="true"
+        />
+
+        {/* Logo */}
+        <div className="relative z-10">
+          <img
+            src="/logo.png"
+            alt="KRONOS by Klyp"
+            className="h-10 w-auto object-contain"
+          />
+        </div>
+
+        {/* Hero text — hidden on small screens (shown in right panel instead) */}
+        <div className="relative z-10 mt-10 lg:mt-0">
+          <h1 className="text-4xl lg:text-5xl font-bold text-white leading-tight">
+            KRONOS
+          </h1>
+          <p className="mt-3 text-base lg:text-lg font-medium" style={{ color: "#E8EDF5", opacity: 0.85 }}>
+            Plataforma integral para RRHH
+          </p>
+          <p className="mt-2 text-sm leading-relaxed max-w-sm" style={{ color: "#E8EDF5", opacity: 0.6 }}>
+            Control de fichajes · Geolocalización · Gestión de vacaciones ·
+            Calendario de turnos · Envío de documentos a trabajadores
+          </p>
+
+          {/* Feature list */}
+          <ul className="mt-8 space-y-4">
+            {FEATURES.map(({ icon: Icon, title, desc }) => (
+              <li key={title} className="flex items-start gap-3">
+                <span
+                  className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg"
+                  style={{ backgroundColor: "rgba(46,109,180,0.25)" }}
+                >
+                  <Icon className="w-4 h-4" style={{ color: "#E8EDF5" }} aria-hidden="true" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-white">{title}</p>
+                  <p className="text-xs mt-0.5" style={{ color: "#E8EDF5", opacity: 0.6 }}>{desc}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Footer */}
+        <div className="relative z-10 mt-10 lg:mt-0 flex items-center gap-2">
+          <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#2E6DB4" }} aria-hidden="true" />
+          <p className="text-xs" style={{ color: "#E8EDF5", opacity: 0.45 }}>
+            © {new Date().getFullYear()} KRONOS by Klyp · Cumple Art. 34.9 ET (RDL 8/2019) · RGPD
+          </p>
+        </div>
+      </div>
+
+      {/* ── Right panel: login form ──────────────────────────────────────── */}
+      <div
+        className="flex flex-col items-center justify-center flex-1
+                   px-6 py-10 lg:px-16"
+        style={{ backgroundColor: "#F0F4FA" }}
+      >
+        <div className="w-full max-w-sm">
+          {/* Heading */}
+          <div className="mb-7">
+            <h2 className="text-2xl font-bold" style={{ color: "#051937" }}>
+              Bienvenido
+            </h2>
+            <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>
+              Accede a tu cuenta para continuar
             </p>
           </div>
 
-          {/* Form */}
-          <div className="px-8 pb-8 pt-4">
+          {/* Form card */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Email */}
               <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-slate-700 font-medium text-sm">
+                <Label htmlFor="email" className="text-sm font-medium" style={{ color: "#374151" }}>
                   Email
                 </Label>
                 <Input
@@ -127,37 +262,47 @@ export default function LoginPage() {
                   required
                   autoComplete="email"
                   data-testid="email-input"
-                  className="h-11 border-slate-200 focus:border-slate-500 focus:ring-slate-500 bg-slate-50"
+                  className="h-10 bg-slate-50 border-slate-200 focus:border-[#2E6DB4] focus:ring-[#2E6DB4] text-sm"
                 />
               </div>
 
+              {/* Password */}
               <div className="space-y-1.5">
-                <Label htmlFor="password" className="text-slate-700 font-medium text-sm">
+                <Label htmlFor="password" className="text-sm font-medium" style={{ color: "#374151" }}>
                   Contraseña
                 </Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                  data-testid="password-input"
-                  className="h-11 border-slate-200 focus:border-slate-500 focus:ring-slate-500 bg-slate-50"
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    autoComplete="current-password"
+                    data-testid="password-input"
+                    className="h-10 bg-slate-50 border-slate-200 focus:border-[#2E6DB4] focus:ring-[#2E6DB4] text-sm pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                    aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" aria-hidden="true" />
+                    ) : (
+                      <Eye className="w-4 h-4" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
               </div>
 
-              <div className="text-right">
-                <Link href="/forgot-password" className="text-xs text-slate-500 hover:text-slate-700 underline">
-                  ¿Olvidaste tu contraseña?
-                </Link>
-              </div>
-
+              {/* Error */}
               {error && (
                 <div
                   role="alert"
-                  className={`flex items-start gap-2.5 text-sm px-3 py-2.5 rounded-lg border ${
+                  className={`flex items-start gap-2.5 text-xs px-3 py-2.5 rounded-lg border ${
                     error.type === "disabled"
                       ? "bg-amber-50 border-amber-200 text-amber-800"
                       : error.type === "notfound"
@@ -166,39 +311,45 @@ export default function LoginPage() {
                   }`}
                 >
                   {error.type === "disabled" ? (
-                    <UserX className="w-4 h-4 shrink-0 mt-0.5" />
+                    <UserX className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
                   ) : error.type === "notfound" ? (
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
                   ) : (
-                    <Lock className="w-4 h-4 shrink-0 mt-0.5" />
+                    <Lock className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
                   )}
                   <span>{error.message}</span>
                 </div>
               )}
 
+              {/* Submit */}
               <button
                 type="submit"
                 disabled={isLoading}
                 data-testid="login-button"
-                className="w-full h-11 mt-2 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white font-semibold rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full h-10 mt-1 text-white text-sm font-semibold rounded-lg transition-colors
+                           disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{ backgroundColor: "#051937" }}
+                onMouseEnter={(e) => { if (!isLoading) (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#1A3A6B"; }}
+                onMouseLeave={(e) => { if (!isLoading) (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#051937"; }}
               >
-                {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
+                {isLoading ? "Iniciando sesión..." : "Iniciar sesión"}
               </button>
             </form>
 
-            <PwaInstructions />
+            {/* Forgot password */}
+            <div className="mt-4 text-center">
+              <Link
+                href="/forgot-password"
+                className="text-xs hover:underline transition-colors"
+                style={{ color: "#2E6DB4" }}
+              >
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
           </div>
-        </div>
 
-        {/* Compliance footer */}
-        <div className="mt-6 flex items-start gap-2 text-xs text-slate-500 text-center px-2">
-          <ShieldCheck className="w-4 h-4 shrink-0 text-slate-400 mt-0.5" aria-hidden="true" />
-          <span>
-            Cumple con el{" "}
-            <span className="text-slate-400 font-medium">Art. 34.9 ET</span>
-            {" "}— registro diario de jornada (RDL 8/2019) y{" "}
-            <span className="text-slate-400 font-medium">RGPD</span>.
-          </span>
+          {/* PWA instructions */}
+          <PwaInstructions />
         </div>
       </div>
     </div>
