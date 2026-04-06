@@ -5,8 +5,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pydantic import BaseModel, Field
 from app.database import get_session
-from app.dependencies import require_admin
+from app.dependencies import require_admin, require_superadmin
 from app.models.app_settings import AppSettings
 from app.models.email_config import EmailConfig
 from app.models.user import User
@@ -45,7 +46,45 @@ async def save_app_settings(
     settings.late_alert_minutes = body.late_alert_minutes
     settings.auto_close_enabled = body.auto_close_enabled
     settings.auto_close_hours = body.auto_close_hours
+    settings.free_trial_max_fichajes = body.free_trial_max_fichajes
 
+    session.add(settings)
+    await session.commit()
+    await session.refresh(settings)
+    return settings
+
+
+# ── Superadmin global settings ────────────────────────────────────────────────
+
+class SuperadminSettingsUpdate(BaseModel):
+    free_trial_max_fichajes: int = Field(default=60, ge=1, le=100000)
+
+
+@router.get("/superadmin", response_model=AppSettingsRead)
+async def get_superadmin_settings(
+    _: User = Depends(require_superadmin),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(select(AppSettings).where(AppSettings.id == 1))
+    settings = result.scalar_one_or_none()
+    if not settings:
+        return AppSettingsRead(late_alert_enabled=False, late_alert_minutes=15,
+                               auto_close_enabled=False, auto_close_hours=12,
+                               free_trial_max_fichajes=60)
+    return settings
+
+
+@router.put("/superadmin", response_model=AppSettingsRead)
+async def save_superadmin_settings(
+    body: SuperadminSettingsUpdate,
+    _: User = Depends(require_superadmin),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(select(AppSettings).where(AppSettings.id == 1))
+    settings = result.scalar_one_or_none()
+    if not settings:
+        settings = AppSettings(id=1)
+    settings.free_trial_max_fichajes = body.free_trial_max_fichajes
     session.add(settings)
     await session.commit()
     await session.refresh(settings)

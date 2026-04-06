@@ -199,9 +199,17 @@ function buildGeoWorkers(fichajes: FichajeAdminItem[]): GeoWorker[] {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
+interface FichajeLimit {
+  has_limit: boolean;
+  max_fichajes: number | null;
+  used: number;
+  remaining: number | null;
+}
+
 export default function AdminDashboard() {
   const [config, setConfig] = useState<DashboardConfig>(CONFIG_DEFAULTS);
   const [configLoaded, setConfigLoaded] = useState(false);
+  const [fichajeLimit, setFichajeLimit] = useState<FichajeLimit | null>(null);
 
   const [kpis, setKpis] = useState<KPIs | null>(null);
   const [lateAlerts, setLateAlerts] = useState<LateAlert[]>([]);
@@ -276,6 +284,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     load();
+    api.get<FichajeLimit>("/fichajes/limit").then((r) => setFichajeLimit(r.data)).catch(() => {});
   }, [load]);
 
   useEffect(() => {
@@ -296,6 +305,33 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Fichaje quota banner */}
+      {fichajeLimit?.has_limit && (
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border text-sm ${
+          fichajeLimit.remaining === 0
+            ? "bg-red-50 border-red-200 text-red-800"
+            : (fichajeLimit.remaining ?? 99) <= 10
+            ? "bg-amber-50 border-amber-200 text-amber-800"
+            : "bg-blue-50 border-blue-200 text-blue-800"
+        }`}>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <div className="flex-1">
+            <span className="font-medium">
+              {fichajeLimit.remaining === 0
+                ? "Límite de fichajes alcanzado — "
+                : `Plan gratuito: `}
+            </span>
+            {fichajeLimit.used} de {fichajeLimit.max_fichajes} fichajes usados
+            {fichajeLimit.remaining !== null && fichajeLimit.remaining > 0 && (
+              <> · <strong>{fichajeLimit.remaining} restantes</strong></>
+            )}
+            {fichajeLimit.remaining === 0 && (
+              <> Contacta con nosotros para ampliar tu plan.</>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>

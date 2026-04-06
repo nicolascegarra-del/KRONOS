@@ -9,6 +9,7 @@ from sqlalchemy import delete as sa_delete, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import func as sql_func
 from app.database import get_session
 from app.dependencies import get_current_user, require_admin, require_superadmin
 from app.models.company import Company
@@ -63,12 +64,78 @@ async def _reload(session: AsyncSession, fichaje_id: UUID) -> Fichaje:
     return result.scalar_one()
 
 
+async def _check_fichaje_limit(user: User, session: AsyncSession) -> None:
+    """Raise 403 if the user's company has reached its fichaje quota."""
+    if not user.company_id:
+        return
+    company_result = await session.execute(
+        select(Company).where(Company.id == user.company_id)
+    )
+    company = company_result.scalar_one_or_none()
+    if not company or company.max_fichajes is None:
+        return  # no limit configured
+
+    count_result = await session.execute(
+        select(sql_func.count(Fichaje.id))
+        .join(User, Fichaje.user_id == User.id)
+        .where(
+            User.company_id == user.company_id,
+            Fichaje.is_deleted == False,
+        )
+    )
+    total = count_result.scalar_one()
+    if total >= company.max_fichajes:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Tu empresa ha alcanzado el límite de {company.max_fichajes} fichajes "
+                f"incluidos en el plan gratuito. Contacta con nosotros para ampliar tu plan."
+            ),
+        )
+
+
+@router.get("/limit")
+async def get_fichaje_limit(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Return the fichaje quota for the current user's company (null if unlimited)."""
+    if not current_user.company_id:
+        return {"has_limit": False, "max_fichajes": None, "used": 0, "remaining": None}
+
+    company_result = await session.execute(
+        select(Company).where(Company.id == current_user.company_id)
+    )
+    company = company_result.scalar_one_or_none()
+    if not company or company.max_fichajes is None:
+        return {"has_limit": False, "max_fichajes": None, "used": 0, "remaining": None}
+
+    count_result = await session.execute(
+        select(sql_func.count(Fichaje.id))
+        .join(User, Fichaje.user_id == User.id)
+        .where(
+            User.company_id == current_user.company_id,
+            Fichaje.is_deleted == False,
+        )
+    )
+    used = count_result.scalar_one()
+    return {
+        "has_limit": True,
+        "max_fichajes": company.max_fichajes,
+        "used": used,
+        "remaining": max(0, company.max_fichajes - used),
+    }
+
+
 @router.post("/start", response_model=FichajeRead, status_code=status.HTTP_201_CREATED)
 async def start_fichaje(
     body: StartRequest = StartRequest(),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    # Check fichaje quota before creating
+    await _check_fichaje_limit(current_user, session)
+
     existing = await _get_active_fichaje(current_user.id, session)
     if existing:
         raise HTTPException(

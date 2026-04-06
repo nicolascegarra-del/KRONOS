@@ -112,6 +112,96 @@ async def logout(
     return {"message": "Logged out"}
 
 
+# ── Free-trial registration ────────────────────────────────────────────────────
+
+class RegisterRequest(BaseModel):
+    company_name: str
+    admin_full_name: str
+    email: str
+    password: str
+
+
+@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+async def register_free_trial(
+    body: RegisterRequest,
+    response: Response,
+    session: AsyncSession = Depends(get_session),
+):
+    """Public endpoint: create a free-trial company + admin and return tokens."""
+    from app.models.company import Company
+    from app.models.app_settings import AppSettings
+
+    if len(body.password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="La contraseña debe tener al menos 8 caracteres",
+        )
+
+    # Unique email check
+    existing_user = await session.execute(select(User).where(User.email == body.email))
+    if existing_user.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ya existe una cuenta con ese email",
+        )
+
+    # Unique company name check
+    existing_company = await session.execute(
+        select(Company).where(Company.name == body.company_name)
+    )
+    if existing_company.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ya existe una empresa con ese nombre",
+        )
+
+    # Read free-trial quota from global settings
+    settings_row = await session.execute(select(AppSettings).where(AppSettings.id == 1))
+    app_settings_obj = settings_row.scalar_one_or_none()
+    max_fichajes = app_settings_obj.free_trial_max_fichajes if app_settings_obj else 60
+
+    # Create company
+    from app.models.user import UserRole
+    company = Company(
+        name=body.company_name,
+        max_workers=5,
+        is_trial=True,
+        max_fichajes=max_fichajes,
+    )
+    session.add(company)
+    await session.flush()
+
+    # Create admin user
+    admin = User(
+        email=body.email,
+        full_name=body.admin_full_name,
+        hashed_password=hash_password(body.password),
+        role=UserRole.admin,
+        company_id=company.id,
+        is_active=True,
+    )
+    session.add(admin)
+    await session.commit()
+    await session.refresh(admin)
+
+    access_token = create_access_token(
+        admin.id, admin.role, admin.full_name,
+        admin.geo_consent, admin.privacy_notice_accepted, admin.company_id,
+    )
+    refresh_token = create_refresh_token(admin.id)
+
+    response.set_cookie(
+        key=REFRESH_COOKIE,
+        value=refresh_token,
+        httponly=True,
+        samesite="lax",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        secure=settings.APP_ENV == "production",
+    )
+
+    return TokenResponse(access_token=access_token)
+
+
 # ── Password reset ─────────────────────────────────────────────────────────────
 
 class ForgotPasswordRequest(BaseModel):

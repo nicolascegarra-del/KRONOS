@@ -89,6 +89,10 @@ async def _run_column_migrations() -> None:
         'ALTER TABLE worker_schedule DROP CONSTRAINT IF EXISTS uq_worker_schedule_user_year_day',
         'ALTER TABLE worker_schedule DROP COLUMN IF EXISTS year',
         'ALTER TABLE worker_schedule DROP COLUMN IF EXISTS day_of_week',
+        # free-trial / fichaje quota
+        'ALTER TABLE company ADD COLUMN IF NOT EXISTS is_trial BOOLEAN NOT NULL DEFAULT false',
+        'ALTER TABLE company ADD COLUMN IF NOT EXISTS max_fichajes INTEGER',
+        'ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS free_trial_max_fichajes INTEGER DEFAULT 60',
     ]
 
     for _sql in _migrations:

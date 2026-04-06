@@ -2,10 +2,11 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/store/auth";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
+import { api } from "@/lib/api";
+import { useAuthStore } from "@/store/auth";
 import {
   Clock,
   MapPin,
@@ -21,6 +22,9 @@ import {
   Smartphone,
   ChevronDown,
   ChevronUp,
+  Sparkles,
+  Building2,
+  User as UserIcon,
 } from "lucide-react";
 
 // ─── Feature list ────────────────────────────────────────────────────────────
@@ -110,49 +114,88 @@ function PwaInstructions() {
 export default function LoginPage() {
   const router = useRouter();
   const { login, isLoading } = useAuthStore();
+
+  // mode
+  const [mode, setMode] = useState<"login" | "register">("login");
+
+  // login fields
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<{
-    message: string;
-    type: "disabled" | "notfound" | "generic";
-  } | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // register fields
+  const [regCompany, setRegCompany] = useState("");
+  const [regName, setRegName] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [regShowPassword, setRegShowPassword] = useState(false);
+
+  const [error, setError] = useState<string | null>(null);
+  const [regLoading, setRegLoading] = useState(false);
+
+  const switchMode = (m: "login" | "register") => {
+    setMode(m);
+    setError(null);
+  };
+
+  const redirectByRole = () => {
+    const user = useAuthStore.getState().user;
+    if (user?.role === "superadmin") router.replace("/superadmin/dashboard");
+    else if (user?.role === "admin") router.replace("/admin/dashboard");
+    else router.replace("/worker/dashboard");
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     try {
       await login(email, password);
-      const user = useAuthStore.getState().user;
-      if (user?.role === "superadmin") {
-        router.replace("/superadmin/dashboard");
-      } else if (user?.role === "admin") {
-        router.replace("/admin/dashboard");
-      } else {
-        router.replace("/worker/dashboard");
-      }
+      redirectByRole();
     } catch (e: any) {
       const detail: string = e.response?.data?.detail ?? "";
       const status: number = e.response?.status ?? 0;
       if (status === 403 || detail.toLowerCase().includes("desactivada")) {
-        setError({
-          message: "Tu cuenta está desactivada. Contacta con tu administrador.",
-          type: "disabled",
-        });
-      } else if (
-        detail.toLowerCase().includes("no existe") ||
-        detail.toLowerCase().includes("ninguna cuenta")
-      ) {
-        setError({
-          message: "No existe ninguna cuenta con ese email.",
-          type: "notfound",
-        });
+        setError("Tu cuenta está desactivada. Contacta con tu administrador.");
+      } else if (detail.toLowerCase().includes("no existe") || detail.toLowerCase().includes("ninguna cuenta")) {
+        setError("No existe ninguna cuenta con ese email.");
       } else {
-        setError({
-          message: detail || "Credenciales incorrectas. Inténtalo de nuevo.",
-          type: "generic",
-        });
+        setError(detail || "Credenciales incorrectas. Inténtalo de nuevo.");
       }
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (regPassword.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres.");
+      return;
+    }
+    setRegLoading(true);
+    try {
+      const res = await api.post("/auth/register", {
+        company_name: regCompany,
+        admin_full_name: regName,
+        email: regEmail,
+        password: regPassword,
+      });
+      const token: string = res.data.access_token;
+      if (typeof window !== "undefined") window.__accessToken = token;
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      useAuthStore.getState().setUser({
+        id: payload.sub,
+        email: regEmail,
+        full_name: payload.full_name ?? regName,
+        role: payload.role,
+        geo_consent: payload.geo_consent ?? null,
+        privacy_notice_accepted: payload.privacy_notice_accepted ?? null,
+        company_id: payload.company_id ?? null,
+      });
+      redirectByRole();
+    } catch (e: any) {
+      setError(e.response?.data?.detail || "Error al crear la cuenta. Inténtalo de nuevo.");
+    } finally {
+      setRegLoading(false);
     }
   };
 
@@ -247,121 +290,171 @@ export default function LoginPage() {
         {/* Form area */}
         <div className="flex-1 lg:flex-none flex items-center justify-center w-full px-6 py-8 lg:px-16">
         <div className="w-full max-w-sm">
-          {/* Heading */}
-          <div className="mb-7 text-center">
-            <h2 className="text-2xl font-bold" style={{ color: "#051937" }}>
-              Bienvenido
-            </h2>
-            <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>
-              Accede a tu cuenta para continuar
-            </p>
-          </div>
 
-          {/* Form card */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Email */}
-              <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-sm font-medium" style={{ color: "#374151" }}>
-                  Email
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="tu@email.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  autoComplete="email"
-                  data-testid="email-input"
-                  className="h-10 bg-slate-50 border-slate-200 focus:border-[#2E6DB4] focus:ring-[#2E6DB4] text-sm"
-                />
+          {mode === "login" ? (
+            <>
+              {/* Heading */}
+              <div className="mb-7 text-center">
+                <h2 className="text-2xl font-bold" style={{ color: "#051937" }}>Bienvenido</h2>
+                <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Accede a tu cuenta para continuar</p>
               </div>
 
-              {/* Password */}
-              <div className="space-y-1.5">
-                <Label htmlFor="password" className="text-sm font-medium" style={{ color: "#374151" }}>
-                  Contraseña
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    autoComplete="current-password"
-                    data-testid="password-input"
-                    className="h-10 bg-slate-50 border-slate-200 focus:border-[#2E6DB4] focus:ring-[#2E6DB4] text-sm pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
-                    aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="w-4 h-4" aria-hidden="true" />
-                    ) : (
-                      <Eye className="w-4 h-4" aria-hidden="true" />
-                    )}
+              {/* Login card */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="email" className="text-sm font-medium" style={{ color: "#374151" }}>Email</Label>
+                    <Input id="email" type="email" placeholder="tu@email.com" value={email}
+                      onChange={(e) => setEmail(e.target.value)} required autoComplete="email"
+                      data-testid="email-input"
+                      className="h-10 bg-slate-50 border-slate-200 focus:border-[#2E6DB4] focus:ring-[#2E6DB4] text-sm" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="password" className="text-sm font-medium" style={{ color: "#374151" }}>Contraseña</Label>
+                    <div className="relative">
+                      <Input id="password" type={showPassword ? "text" : "password"} placeholder="••••••••"
+                        value={password} onChange={(e) => setPassword(e.target.value)} required
+                        autoComplete="current-password" data-testid="password-input"
+                        className="h-10 bg-slate-50 border-slate-200 focus:border-[#2E6DB4] focus:ring-[#2E6DB4] text-sm pr-10" />
+                      <button type="button" onClick={() => setShowPassword((v) => !v)}
+                        className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                        aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}>
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {error && (
+                    <div role="alert" className="flex items-start gap-2 text-xs px-3 py-2.5 rounded-lg border bg-red-50 border-red-200 text-red-700">
+                      <Lock className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  <button type="submit" disabled={isLoading} data-testid="login-button"
+                    className="w-full h-10 mt-1 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    style={{ backgroundColor: "#051937" }}
+                    onMouseEnter={(e) => { if (!isLoading) (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#1A3A6B"; }}
+                    onMouseLeave={(e) => { if (!isLoading) (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#051937"; }}>
+                    {isLoading ? "Iniciando sesión..." : "Iniciar sesión"}
+                  </button>
+                </form>
+
+                <div className="mt-4 text-center">
+                  <Link href="/forgot-password" className="text-xs hover:underline" style={{ color: "#2E6DB4" }}>
+                    ¿Olvidaste tu contraseña?
+                  </Link>
+                </div>
+              </div>
+
+              {/* Free trial CTA */}
+              <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-white p-4 text-center">
+                <p className="text-xs font-medium mb-2" style={{ color: "#374151" }}>
+                  ¿Aún no tienes cuenta?
+                </p>
+                <button
+                  type="button"
+                  onClick={() => switchMode("register")}
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                  style={{ backgroundColor: "#E8EDF5", color: "#051937" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#d1daea"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#E8EDF5"; }}
+                >
+                  <Sparkles className="w-4 h-4" style={{ color: "#2E6DB4" }} />
+                  Probar gratis — 60 fichajes incluidos
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Heading */}
+              <div className="mb-7 text-center">
+                <h2 className="text-2xl font-bold" style={{ color: "#051937" }}>Crear cuenta gratis</h2>
+                <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>
+                  Incluye 60 fichajes sin tarjeta de crédito
+                </p>
+              </div>
+
+              {/* Register card */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <form onSubmit={handleRegister} className="space-y-4">
+                  {/* Company name */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="reg-company" className="text-sm font-medium" style={{ color: "#374151" }}>
+                      Nombre de la empresa
+                    </Label>
+                    <div className="relative">
+                      <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <Input id="reg-company" type="text" placeholder="Mi Empresa S.L." value={regCompany}
+                        onChange={(e) => setRegCompany(e.target.value)} required
+                        className="h-10 bg-slate-50 border-slate-200 focus:border-[#2E6DB4] text-sm pl-9" />
+                    </div>
+                  </div>
+
+                  {/* Full name */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="reg-name" className="text-sm font-medium" style={{ color: "#374151" }}>
+                      Tu nombre completo
+                    </Label>
+                    <div className="relative">
+                      <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <Input id="reg-name" type="text" placeholder="Juan García" value={regName}
+                        onChange={(e) => setRegName(e.target.value)} required
+                        className="h-10 bg-slate-50 border-slate-200 focus:border-[#2E6DB4] text-sm pl-9" />
+                    </div>
+                  </div>
+
+                  {/* Email */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="reg-email" className="text-sm font-medium" style={{ color: "#374151" }}>Email</Label>
+                    <Input id="reg-email" type="email" placeholder="tu@empresa.com" value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)} required autoComplete="email"
+                      className="h-10 bg-slate-50 border-slate-200 focus:border-[#2E6DB4] text-sm" />
+                  </div>
+
+                  {/* Password */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="reg-password" className="text-sm font-medium" style={{ color: "#374151" }}>Contraseña</Label>
+                    <div className="relative">
+                      <Input id="reg-password" type={regShowPassword ? "text" : "password"} placeholder="Mín. 8 caracteres"
+                        value={regPassword} onChange={(e) => setRegPassword(e.target.value)} required autoComplete="new-password"
+                        className="h-10 bg-slate-50 border-slate-200 focus:border-[#2E6DB4] text-sm pr-10" />
+                      <button type="button" onClick={() => setRegShowPassword((v) => !v)}
+                        className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                        aria-label={regShowPassword ? "Ocultar contraseña" : "Mostrar contraseña"}>
+                        {regShowPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {error && (
+                    <div role="alert" className="flex items-start gap-2 text-xs px-3 py-2.5 rounded-lg border bg-red-50 border-red-200 text-red-700">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  <button type="submit" disabled={regLoading}
+                    className="w-full h-10 mt-1 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    style={{ backgroundColor: "#2E6DB4" }}
+                    onMouseEnter={(e) => { if (!regLoading) (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#1A3A6B"; }}
+                    onMouseLeave={(e) => { if (!regLoading) (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#2E6DB4"; }}>
+                    {regLoading ? "Creando cuenta..." : "Crear cuenta gratis"}
+                  </button>
+                </form>
+
+                <div className="mt-4 text-center">
+                  <button type="button" onClick={() => switchMode("login")}
+                    className="text-xs hover:underline" style={{ color: "#6B7280" }}>
+                    ¿Ya tienes cuenta? Inicia sesión
                   </button>
                 </div>
               </div>
+            </>
+          )}
 
-              {/* Error */}
-              {error && (
-                <div
-                  role="alert"
-                  className={`flex items-start gap-2.5 text-xs px-3 py-2.5 rounded-lg border ${
-                    error.type === "disabled"
-                      ? "bg-amber-50 border-amber-200 text-amber-800"
-                      : error.type === "notfound"
-                      ? "bg-blue-50 border-blue-200 text-blue-800"
-                      : "bg-red-50 border-red-200 text-red-700"
-                  }`}
-                >
-                  {error.type === "disabled" ? (
-                    <UserX className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
-                  ) : error.type === "notfound" ? (
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
-                  ) : (
-                    <Lock className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
-                  )}
-                  <span>{error.message}</span>
-                </div>
-              )}
-
-              {/* Submit */}
-              <button
-                type="submit"
-                disabled={isLoading}
-                data-testid="login-button"
-                className="w-full h-10 mt-1 text-white text-sm font-semibold rounded-lg transition-colors
-                           disabled:opacity-60 disabled:cursor-not-allowed"
-                style={{ backgroundColor: "#051937" }}
-                onMouseEnter={(e) => { if (!isLoading) (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#1A3A6B"; }}
-                onMouseLeave={(e) => { if (!isLoading) (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#051937"; }}
-              >
-                {isLoading ? "Iniciando sesión..." : "Iniciar sesión"}
-              </button>
-            </form>
-
-            {/* Forgot password */}
-            <div className="mt-4 text-center">
-              <Link
-                href="/forgot-password"
-                className="text-xs hover:underline transition-colors"
-                style={{ color: "#2E6DB4" }}
-              >
-                ¿Olvidaste tu contraseña?
-              </Link>
-            </div>
-          </div>
-
-          {/* PWA instructions */}
-          <PwaInstructions />
+          {/* PWA instructions — only in login mode */}
+          {mode === "login" && <PwaInstructions />}
         </div>
         </div>{/* end form area */}
       </div>

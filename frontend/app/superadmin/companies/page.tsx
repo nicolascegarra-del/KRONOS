@@ -22,6 +22,9 @@ interface CompanyRead {
   schedule_enabled: boolean;
   vacation_enabled: boolean;
   worker_count: number;
+  fichaje_count: number;
+  is_trial: boolean;
+  max_fichajes?: number | null;
   created_at: string;
   logo_url?: string;
   // Billing
@@ -53,6 +56,8 @@ interface EditForm {
   geo_enabled: boolean;
   schedule_enabled: boolean;
   vacation_enabled: boolean;
+  is_trial: boolean;
+  max_fichajes: string; // string to allow empty = unlimited
   // Billing
   nif: string;
   address: string;
@@ -93,7 +98,7 @@ export default function CompaniesPage() {
 
   // Edit dialog
   const [editTarget, setEditTarget] = useState<CompanyRead | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({ name: "", max_workers: 10, geo_enabled: true, schedule_enabled: true, vacation_enabled: true, nif: "", address: "", city: "", postal_code: "", phone: "", billing_email: "" });
+  const [editForm, setEditForm] = useState<EditForm>({ name: "", max_workers: 10, geo_enabled: true, schedule_enabled: true, vacation_enabled: true, is_trial: false, max_fichajes: "", nif: "", address: "", city: "", postal_code: "", phone: "", billing_email: "" });
   const [editError, setEditError] = useState<string | null>(null);
   const [editLoading, setEditLoading] = useState(false);
 
@@ -197,6 +202,8 @@ export default function CompaniesPage() {
       geo_enabled: c.geo_enabled,
       schedule_enabled: c.schedule_enabled,
       vacation_enabled: c.vacation_enabled,
+      is_trial: c.is_trial ?? false,
+      max_fichajes: c.max_fichajes != null ? String(c.max_fichajes) : "",
       nif: c.nif ?? "",
       address: c.address ?? "",
       city: c.city ?? "",
@@ -220,7 +227,10 @@ export default function CompaniesPage() {
     setEditError(null);
     setEditLoading(true);
     try {
-      await api.put(`/companies/${editTarget.id}`, editForm);
+      await api.put(`/companies/${editTarget.id}`, {
+        ...editForm,
+        max_fichajes: editForm.max_fichajes === "" ? 0 : parseInt(editForm.max_fichajes, 10),
+      });
       setEditTarget(null);
       fetchCompanies();
     } catch (err: any) {
@@ -342,8 +352,15 @@ export default function CompaniesPage() {
                         : <Building2 className="w-5 h-5 text-slate-400" />
                       }
                     </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold">{c.name}</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold">{c.name}</p>
+                        {c.is_trial && (
+                          <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                            FREE TRIAL
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         {c.worker_count} / {c.max_workers} trabajadores ·{" "}
                         Alta: {new Date(c.created_at).toLocaleDateString("es-ES")}
@@ -360,6 +377,29 @@ export default function CompaniesPage() {
                           🏖 Vacaciones {c.vacation_enabled ? "ON" : "OFF"}
                         </span>
                       </div>
+                      {/* Fichaje quota bar */}
+                      {c.max_fichajes != null && (
+                        <div className="mt-2 max-w-xs">
+                          <div className="flex justify-between text-xs text-muted-foreground mb-0.5">
+                            <span>Fichajes usados</span>
+                            <span className={c.fichaje_count >= c.max_fichajes ? "text-red-600 font-semibold" : ""}>
+                              {c.fichaje_count} / {c.max_fichajes}
+                            </span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                c.fichaje_count >= c.max_fichajes
+                                  ? "bg-red-500"
+                                  : c.fichaje_count >= c.max_fichajes * 0.8
+                                  ? "bg-amber-400"
+                                  : "bg-green-500"
+                              }`}
+                              style={{ width: `${Math.min(100, (c.fichaje_count / c.max_fichajes) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-1 shrink-0">
@@ -522,6 +562,38 @@ export default function CompaniesPage() {
                 required
               />
             </div>
+            {/* Plan / quota */}
+            <div className="space-y-3 rounded-lg border p-3 bg-slate-50">
+              <p className="text-sm font-semibold">Plan y cuota de fichajes</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Free Trial</p>
+                  <p className="text-xs text-muted-foreground">Empresa en periodo de prueba gratuito</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditForm((f) => ({ ...f, is_trial: !f.is_trial }))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editForm.is_trial ? "bg-amber-400" : "bg-slate-200"}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${editForm.is_trial ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+              <div className="space-y-1">
+                <Label>Límite de fichajes</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={editForm.max_fichajes}
+                  onChange={(e) => setEditForm((f) => ({ ...f, max_fichajes: e.target.value }))}
+                  placeholder="Vacío = sin límite"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Deja vacío para ilimitado · Pon 0 para eliminar el límite actual ·{" "}
+                  {editTarget?.fichaje_count ?? 0} fichajes usados actualmente
+                </p>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <p className="text-sm font-medium">Funcionalidades</p>
               {[

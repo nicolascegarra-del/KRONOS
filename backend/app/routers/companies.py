@@ -33,7 +33,7 @@ async def _worker_count(session: AsyncSession, company_id: UUID) -> int:
     return result.scalar_one()
 
 
-def _to_read(c: Company, worker_count: int) -> CompanyRead:
+def _to_read(c: Company, worker_count: int, fichaje_count: int = 0) -> CompanyRead:
     return CompanyRead(
         id=c.id,
         name=c.name,
@@ -42,8 +42,11 @@ def _to_read(c: Company, worker_count: int) -> CompanyRead:
         schedule_enabled=c.schedule_enabled if c.schedule_enabled is not None else True,
         vacation_enabled=c.vacation_enabled if c.vacation_enabled is not None else True,
         worker_count=worker_count,
+        fichaje_count=fichaje_count,
         created_at=c.created_at,
         logo_url=c.logo_url,
+        is_trial=c.is_trial if c.is_trial is not None else False,
+        max_fichajes=c.max_fichajes,
         nif=c.nif,
         address=c.address,
         city=c.city,
@@ -144,12 +147,13 @@ async def list_companies(
 ):
     result = await session.execute(select(Company).order_by(Company.created_at))
     companies = result.scalars().all()
+    company_ids = [c.id for c in companies]
 
     # Single query for all worker counts (avoids N+1)
     counts_result = await session.execute(
         select(User.company_id, func.count().label("cnt"))
         .where(
-            User.company_id.in_([c.id for c in companies]),
+            User.company_id.in_(company_ids),
             User.role == UserRole.worker,
             User.is_active == True,
         )
@@ -157,7 +161,16 @@ async def list_companies(
     )
     counts: dict = {row.company_id: row.cnt for row in counts_result.all()}
 
-    return [_to_read(c, counts.get(c.id, 0)) for c in companies]
+    # Single query for fichaje counts per company (avoids N+1)
+    fichaje_counts_result = await session.execute(
+        select(User.company_id, func.count(Fichaje.id).label("fcnt"))
+        .join(Fichaje, Fichaje.user_id == User.id)
+        .where(User.company_id.in_(company_ids), Fichaje.is_deleted == False)
+        .group_by(User.company_id)
+    )
+    fichaje_counts: dict = {row.company_id: row.fcnt for row in fichaje_counts_result.all()}
+
+    return [_to_read(c, counts.get(c.id, 0), fichaje_counts.get(c.id, 0)) for c in companies]
 
 
 @router.post("", response_model=CompanyRead, status_code=status.HTTP_201_CREATED)
@@ -247,6 +260,11 @@ async def update_company(
         company.subscription_start = body.subscription_start
     if body.subscription_end is not None:
         company.subscription_end = body.subscription_end
+    if body.is_trial is not None:
+        company.is_trial = body.is_trial
+    if body.max_fichajes is not None:
+        # 0 means remove limit (unlimited)
+        company.max_fichajes = None if body.max_fichajes == 0 else body.max_fichajes
 
     session.add(company)
     await session.commit()

@@ -20,6 +20,8 @@ class CompanyUpdate(BaseModel):
     geo_enabled: Optional[bool] = None
     schedule_enabled: Optional[bool] = None
     vacation_enabled: Optional[bool] = None
+    max_fichajes: Optional[int] = None   # None = don't change; 0 = remove limit
+    is_trial: Optional[bool] = None
     # Billing
     nif: Optional[str] = None
     address: Optional[str] = None
@@ -45,6 +47,9 @@ class CompanyRead(BaseModel):
     worker_count: int
     created_at: datetime
     logo_url: Optional[str] = None
+    is_trial: bool = False
+    max_fichajes: Optional[int] = None
+    fichaje_count: int = 0   # total fichajes used (populated by router)
     # Billing
     nif: Optional[str] = None
     address: Optional[str] = None

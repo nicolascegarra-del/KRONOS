@@ -9,3 +9,4 @@ class AppSettings(SQLModel, table=True):
     late_alert_minutes: int = Field(default=15)
     auto_close_enabled: bool = Field(default=False)
     auto_close_hours: int = Field(default=12)
+    free_trial_max_fichajes: int = Field(default=60)  # fichaje quota for new free-trial companies

@@ -37,5 +37,9 @@ class Company(SQLModel, table=True):
 
     logo_url: Optional[str] = Field(default=None)  # base64 data URL
 
+    # Free-trial / fichaje quota
+    is_trial: bool = Field(default=False)
+    max_fichajes: Optional[int] = Field(default=None)  # None = unlimited
+
     users: List["User"] = Relationship(back_populates="company")
     work_centers: List["WorkCenter"] = Relationship(back_populates="company")
