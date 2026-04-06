@@ -383,6 +383,9 @@ export default function CompaniesPage() {
                         <span className={`text-xs ${c.vacation_enabled ? "text-green-600" : "text-slate-400"}`}>
                           🏖 Vacaciones {c.vacation_enabled ? "ON" : "OFF"}
                         </span>
+                        <span className={`text-xs ${c.docs_enabled ? "text-green-600" : "text-slate-400"}`}>
+                          📄 Documentos {c.docs_enabled ? "ON" : "OFF"}
+                        </span>
                       </div>
                       {/* Fichaje quota bar */}
                       {c.max_fichajes != null && (
