@@ -13,7 +13,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    mem_limit: 512m
+    mem_limit: 768m
     mem_reservation: 128m
     networks:
       - default
@@ -38,7 +38,7 @@ services:
       timeout: 5s
       retries: 8
       start_period: 45s
-    mem_limit: 512m
+    mem_limit: 768m
     mem_reservation: 128m
     networks:
       - default
@@ -61,8 +61,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 45s
-    mem_limit: 512m
-    mem_reservation: 128m
+    mem_limit: 1024m
+    mem_reservation: 256m
     networks:
       - default
       - coolify
