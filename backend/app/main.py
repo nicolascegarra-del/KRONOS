@@ -196,6 +196,47 @@ async def _send_monthly_reports(now: "datetime") -> None:
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
+async def _cleanup_loop() -> None:
+    """Background task: purge stale DB rows daily to prevent unbounded table growth.
+
+    Without cleanup, password_reset_token and admin_access_log grow forever.
+    Large tables → slow queries → connections held longer → pool exhaustion → app crashes.
+    """
+    await asyncio.sleep(120)  # let startup settle first
+    while True:
+        try:
+            from sqlalchemy import text, delete as sa_delete
+            from app.database import AsyncSessionLocal
+            from app.models.password_reset import PasswordResetToken
+            from app.models.adminaccesslog import AdminAccessLog
+            from datetime import timedelta
+
+            async with AsyncSessionLocal() as session:
+                cutoff_tokens = datetime.utcnow() - timedelta(hours=24)
+                result = await session.execute(
+                    sa_delete(PasswordResetToken).where(
+                        PasswordResetToken.expires_at < cutoff_tokens
+                    )
+                )
+                deleted_tokens = result.rowcount
+
+                cutoff_logs = datetime.utcnow() - timedelta(days=90)
+                result = await session.execute(
+                    sa_delete(AdminAccessLog).where(
+                        AdminAccessLog.accessed_at < cutoff_logs
+                    )
+                )
+                deleted_logs = result.rowcount
+
+                await session.commit()
+
+            if deleted_tokens or deleted_logs:
+                print(f"[cleanup] Removed {deleted_tokens} expired tokens, {deleted_logs} old access logs")
+        except Exception as exc:
+            print(f"[cleanup] Error: {exc}")
+        await asyncio.sleep(86400)  # run once per day
+
+
 _DEFAULT_SECRET = "change-me-in-production-very-secret-key"
 
 
@@ -261,11 +302,13 @@ async def lifespan(app: FastAPI):
     startup_task = asyncio.create_task(_do_startup())
     task = asyncio.create_task(_auto_close_loop())
     monthly_task = asyncio.create_task(_monthly_report_loop())
+    cleanup_task = asyncio.create_task(_cleanup_loop())
     yield
     startup_task.cancel()
     task.cancel()
     monthly_task.cancel()
-    for t in (startup_task, task, monthly_task):
+    cleanup_task.cancel()
+    for t in (startup_task, task, monthly_task, cleanup_task):
         try:
             await t
         except asyncio.CancelledError:

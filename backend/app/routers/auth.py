@@ -145,7 +145,8 @@ async def forgot_password(
 
         reset_link = f"{settings.APP_URL}/reset-password?token={token_value}"
         import asyncio
-        asyncio.create_task(_fire_password_reset_email(user, reset_link))
+        t = asyncio.create_task(_fire_password_reset_email(user, reset_link))
+        t.add_done_callback(lambda _: None)  # keep reference alive until completion
 
     return {"message": "Si existe esa cuenta, recibirás un email con instrucciones."}
 

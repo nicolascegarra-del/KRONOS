@@ -123,7 +123,8 @@ async def start_fichaje(
                 in_range = is_within_any_work_center(body.coords.lat, body.coords.lng, work_centers)
                 fichaje.out_of_range = not in_range
                 if not in_range:
-                    asyncio.create_task(_notify_out_of_range(current_user, current_user.company_id))
+                    t = asyncio.create_task(_notify_out_of_range(current_user, current_user.company_id))
+                    t.add_done_callback(lambda _: None)  # keep reference alive until completion
 
     session.add(fichaje)
     await session.commit()
@@ -339,7 +340,8 @@ async def admin_list_fichajes(
         "from_date": from_date.isoformat() if from_date else None,
         "to_date": to_date.isoformat() if to_date else None,
     })
-    await log_admin_access(admin.id, "VIEW_FICHAJES", details)
+    t = asyncio.create_task(log_admin_access(admin.id, "VIEW_FICHAJES", details))
+    t.add_done_callback(lambda _: None)  # keep reference alive until completion
     return FichajeAdminListResponse(items=list(rows), total=total)
 
 

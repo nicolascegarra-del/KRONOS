@@ -52,29 +52,35 @@ async def get_late_alerts(
     )
     workers = result.scalars().all()
 
+    # Filter to workers whose threshold has already passed
+    eligible = [
+        w for w in workers
+        if now >= datetime.combine(today, w.scheduled_start) + timedelta(minutes=threshold)
+    ]
+
     alerts: list[LateAlert] = []
+    if not eligible:
+        return alerts
 
-    for worker in workers:
-        # Skip if threshold hasn't passed yet
-        threshold_dt = datetime.combine(today, worker.scheduled_start) + timedelta(minutes=threshold)
-        if now < threshold_dt:
-            continue
-
-        # Look for today's fichaje
-        res = await session.execute(
-            select(Fichaje)
-            .where(
-                Fichaje.user_id == worker.id,
-                Fichaje.start_time >= from_dt,
-                Fichaje.start_time <= to_dt,
-            )
-            .order_by(Fichaje.start_time)
-            .limit(1)
+    # Batch-fetch today's earliest fichaje for all eligible workers in one query
+    from sqlalchemy import func as sql_func
+    eligible_ids = [w.id for w in eligible]
+    fichajes_result = await session.execute(
+        select(Fichaje.user_id, sql_func.min(Fichaje.start_time).label("first_start"), sql_func.min(Fichaje.late_minutes).label("late_min"))
+        .where(
+            Fichaje.user_id.in_(eligible_ids),
+            Fichaje.start_time >= from_dt,
+            Fichaje.start_time <= to_dt,
         )
-        fichaje = res.scalar_one_or_none()
-        scheduled_str = worker.scheduled_start.strftime("%H:%M")
+        .group_by(Fichaje.user_id)
+    )
+    fichaje_map: dict = {row.user_id: row for row in fichajes_result.all()}
 
-        if fichaje is None:
+    for worker in eligible:
+        scheduled_str = worker.scheduled_start.strftime("%H:%M")
+        row = fichaje_map.get(worker.id)
+
+        if row is None:
             minutes_late = int(
                 (now - datetime.combine(today, worker.scheduled_start)).total_seconds() / 60
             )
@@ -88,7 +94,7 @@ async def get_late_alerts(
                     minutes_late=minutes_late,
                 )
             )
-        elif (fichaje.late_minutes or 0) >= threshold:
+        elif (row.late_min or 0) >= threshold:
             alerts.append(
                 LateAlert(
                     type="late",
@@ -96,7 +102,7 @@ async def get_late_alerts(
                     full_name=worker.full_name,
                     email=worker.email,
                     scheduled_start=scheduled_str,
-                    minutes_late=fichaje.late_minutes or 0,
+                    minutes_late=row.late_min or 0,
                 )
             )
 
