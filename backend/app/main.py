@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import auth, users, fichajes, reports, pause_types, notifications, companies, worker_schedule, work_centers, superadmin_users, invoice_config, worker_export, access_logs, absence
+from app.routers import auth, users, fichajes, reports, pause_types, notifications, companies, worker_schedule, work_centers, superadmin_users, invoice_config, worker_export, access_logs, absence, documents
 from app.routers import settings as settings_router
 
 app_settings = get_settings()
@@ -93,6 +93,26 @@ async def _run_column_migrations() -> None:
         'ALTER TABLE company ADD COLUMN IF NOT EXISTS is_trial BOOLEAN NOT NULL DEFAULT false',
         'ALTER TABLE company ADD COLUMN IF NOT EXISTS max_fichajes INTEGER',
         'ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS free_trial_max_fichajes INTEGER DEFAULT 60',
+        # document module
+        'ALTER TABLE company ADD COLUMN IF NOT EXISTS docs_enabled BOOLEAN NOT NULL DEFAULT false',
+        'ALTER TABLE company ADD COLUMN IF NOT EXISTS max_storage_mb INTEGER NOT NULL DEFAULT 100',
+        '''CREATE TABLE IF NOT EXISTS document (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            company_id UUID NOT NULL REFERENCES company(id) ON DELETE CASCADE,
+            user_id UUID REFERENCES "user"(id) ON DELETE SET NULL,
+            filename VARCHAR NOT NULL,
+            stored_path VARCHAR NOT NULL,
+            content_type VARCHAR NOT NULL,
+            size_bytes BIGINT NOT NULL,
+            uploaded_by UUID NOT NULL REFERENCES "user"(id),
+            uploaded_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            category VARCHAR,
+            description TEXT
+        )''',
+        'CREATE UNIQUE INDEX IF NOT EXISTS uq_document_stored_path ON document (stored_path)',
+        'CREATE INDEX IF NOT EXISTS ix_document_company_id ON document (company_id)',
+        'CREATE INDEX IF NOT EXISTS ix_document_user_id ON document (user_id)',
+        'CREATE INDEX IF NOT EXISTS ix_document_company_date ON document (company_id, uploaded_at DESC)',
     ]
 
     for _sql in _migrations:
@@ -259,6 +279,7 @@ async def _do_startup() -> None:
     import app.models.adminaccesslog  # noqa: F401
     import app.models.absence  # noqa: F401
     import app.models.password_reset  # noqa: F401
+    import app.models.document  # noqa: F401
 
     # Pre-migration: drop email_config if it still uses the old integer PK
     # so init_db() can recreate it with the new UUID PK + company_id schema.
@@ -348,6 +369,7 @@ app.include_router(invoice_config.router)
 app.include_router(worker_export.router)
 app.include_router(access_logs.router)
 app.include_router(absence.router)
+app.include_router(documents.router)
 
 
 @app.get("/health")

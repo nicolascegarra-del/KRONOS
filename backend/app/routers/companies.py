@@ -47,6 +47,8 @@ def _to_read(c: Company, worker_count: int, fichaje_count: int = 0) -> CompanyRe
         logo_url=c.logo_url,
         is_trial=c.is_trial if c.is_trial is not None else False,
         max_fichajes=c.max_fichajes,
+        docs_enabled=c.docs_enabled if c.docs_enabled is not None else False,
+        max_storage_mb=c.max_storage_mb if c.max_storage_mb is not None else 100,
         nif=c.nif,
         address=c.address,
         city=c.city,
@@ -84,14 +86,15 @@ async def get_company_features(
     """Return feature flags for the current user's company (usable by admin and worker)."""
     if not user.company_id:
         # Superadmin has no company — all features enabled
-        return {"schedule_enabled": True, "vacation_enabled": True}
+        return {"schedule_enabled": True, "vacation_enabled": True, "docs_enabled": False}
     result = await session.execute(select(Company).where(Company.id == user.company_id))
     company = result.scalar_one_or_none()
     if not company:
-        return {"schedule_enabled": True, "vacation_enabled": True}
+        return {"schedule_enabled": True, "vacation_enabled": True, "docs_enabled": False}
     return {
         "schedule_enabled": company.schedule_enabled if company.schedule_enabled is not None else True,
         "vacation_enabled": company.vacation_enabled if company.vacation_enabled is not None else True,
+        "docs_enabled": company.docs_enabled if company.docs_enabled is not None else False,
     }
 
 
@@ -265,6 +268,10 @@ async def update_company(
     if body.max_fichajes is not None:
         # 0 means remove limit (unlimited)
         company.max_fichajes = None if body.max_fichajes == 0 else body.max_fichajes
+    if body.docs_enabled is not None:
+        company.docs_enabled = body.docs_enabled
+    if body.max_storage_mb is not None:
+        company.max_storage_mb = body.max_storage_mb
 
     session.add(company)
     await session.commit()

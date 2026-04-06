@@ -30,6 +30,8 @@ services:
       CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3000"]}'
       APP_ENV: ${APP_ENV:-production}
       APP_URL: ${APP_URL:-https://kronos.klyp.es}
+    volumes:
+      - storage_data:/app/storage
     expose:
       - "8000"
     healthcheck:
@@ -69,6 +71,7 @@ services:
 
 volumes:
   pgdata:
+  storage_data:
 
 networks:
   default:

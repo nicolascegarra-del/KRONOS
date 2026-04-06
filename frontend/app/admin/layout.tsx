@@ -16,12 +16,13 @@ import {
   MapPin,
   MoreHorizontal,
   CalendarRange,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import NotificationBell from "@/components/NotificationBell";
 import { api } from "@/lib/api";
 
-interface Features { schedule_enabled: boolean; vacation_enabled: boolean; }
+interface Features { schedule_enabled: boolean; vacation_enabled: boolean; docs_enabled: boolean; }
 
 const BASE_NAV = [
   { href: "/admin/dashboard", label: "Panel", icon: LayoutDashboard, feature: null },
@@ -29,6 +30,7 @@ const BASE_NAV = [
   { href: "/admin/fichajes", label: "Fichajes", icon: Clock, feature: null },
   { href: "/admin/reports", label: "Informes", icon: BarChart2, feature: null },
   { href: "/admin/absences", label: "Ausencias", icon: CalendarRange, feature: "vacation_enabled" },
+  { href: "/admin/documents", label: "Documentos", icon: FileText, feature: "docs_enabled" },
   { href: "/admin/work-centers", label: "Centros trabajo", icon: MapPin, feature: null },
   { href: "/admin/pause-types", label: "Tipos pausa", icon: Tag, feature: null },
   { href: "/admin/settings", label: "Configuración", icon: Settings, feature: null },
@@ -44,7 +46,7 @@ export default function AdminLayout({
   const { user, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [features, setFeatures] = useState<Features>({ schedule_enabled: true, vacation_enabled: true });
+  const [features, setFeatures] = useState<Features>({ schedule_enabled: true, vacation_enabled: true, docs_enabled: false });
 
   useEffect(() => {
     api.get<Features>("/companies/features").then((r) => setFeatures(r.data)).catch(() => {});

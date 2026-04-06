@@ -41,5 +41,9 @@ class Company(SQLModel, table=True):
     is_trial: bool = Field(default=False)
     max_fichajes: Optional[int] = Field(default=None)  # None = unlimited
 
+    # Document module
+    docs_enabled: bool = Field(default=False)
+    max_storage_mb: int = Field(default=100)  # storage quota in MB
+
     users: List["User"] = Relationship(back_populates="company")
     work_centers: List["WorkCenter"] = Relationship(back_populates="company")

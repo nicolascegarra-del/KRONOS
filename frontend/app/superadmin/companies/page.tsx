@@ -25,6 +25,8 @@ interface CompanyRead {
   fichaje_count: number;
   is_trial: boolean;
   max_fichajes?: number | null;
+  docs_enabled: boolean;
+  max_storage_mb: number;
   created_at: string;
   logo_url?: string;
   // Billing
@@ -58,6 +60,8 @@ interface EditForm {
   vacation_enabled: boolean;
   is_trial: boolean;
   max_fichajes: string; // string to allow empty = unlimited
+  docs_enabled: boolean;
+  max_storage_mb: string;
   // Billing
   nif: string;
   address: string;
@@ -98,7 +102,7 @@ export default function CompaniesPage() {
 
   // Edit dialog
   const [editTarget, setEditTarget] = useState<CompanyRead | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({ name: "", max_workers: 10, geo_enabled: true, schedule_enabled: true, vacation_enabled: true, is_trial: false, max_fichajes: "", nif: "", address: "", city: "", postal_code: "", phone: "", billing_email: "" });
+  const [editForm, setEditForm] = useState<EditForm>({ name: "", max_workers: 10, geo_enabled: true, schedule_enabled: true, vacation_enabled: true, is_trial: false, max_fichajes: "", docs_enabled: false, max_storage_mb: "100", nif: "", address: "", city: "", postal_code: "", phone: "", billing_email: "" });
   const [editError, setEditError] = useState<string | null>(null);
   const [editLoading, setEditLoading] = useState(false);
 
@@ -204,6 +208,8 @@ export default function CompaniesPage() {
       vacation_enabled: c.vacation_enabled,
       is_trial: c.is_trial ?? false,
       max_fichajes: c.max_fichajes != null ? String(c.max_fichajes) : "",
+      docs_enabled: c.docs_enabled ?? false,
+      max_storage_mb: String(c.max_storage_mb ?? 100),
       nif: c.nif ?? "",
       address: c.address ?? "",
       city: c.city ?? "",
@@ -230,6 +236,7 @@ export default function CompaniesPage() {
       await api.put(`/companies/${editTarget.id}`, {
         ...editForm,
         max_fichajes: editForm.max_fichajes === "" ? 0 : parseInt(editForm.max_fichajes, 10),
+        max_storage_mb: parseInt(editForm.max_storage_mb, 10) || 100,
       });
       setEditTarget(null);
       fetchCompanies();
@@ -615,6 +622,49 @@ export default function CompaniesPage() {
                   </button>
                 </div>
               ))}
+              {/* Document module */}
+              <div className="rounded-lg border p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Módulo de documentos</p>
+                    <p className="text-xs text-muted-foreground">El admin puede subir nóminas y contratos para los trabajadores.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditForm((f) => ({ ...f, docs_enabled: !f.docs_enabled }))}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editForm.docs_enabled ? "bg-primary" : "bg-slate-200"}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${editForm.docs_enabled ? "translate-x-6" : "translate-x-1"}`} />
+                  </button>
+                </div>
+                {editForm.docs_enabled && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Cuota de almacenamiento (MB)</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={50}
+                        value={editForm.max_storage_mb}
+                        onChange={(e) => setEditForm((f) => ({ ...f, max_storage_mb: e.target.value }))}
+                        className="h-8 w-32"
+                      />
+                      <div className="flex gap-1">
+                        {[100, 1000, 5000].map((mb) => (
+                          <button
+                            key={mb}
+                            type="button"
+                            onClick={() => setEditForm((f) => ({ ...f, max_storage_mb: String(mb) }))}
+                            className="text-xs px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-600"
+                          >
+                            {mb >= 1000 ? `${mb / 1000}GB` : `${mb}MB`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Trial: 100 MB · Monthly: 1 GB · Annual: 5 GB</p>
+                  </div>
+                )}
+              </div>
             </div>
             <hr />
             <p className="text-sm font-medium text-muted-foreground">Datos de facturación</p>

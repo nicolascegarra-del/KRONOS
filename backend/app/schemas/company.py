@@ -22,6 +22,8 @@ class CompanyUpdate(BaseModel):
     vacation_enabled: Optional[bool] = None
     max_fichajes: Optional[int] = None   # None = don't change; 0 = remove limit
     is_trial: Optional[bool] = None
+    docs_enabled: Optional[bool] = None
+    max_storage_mb: Optional[int] = None
     # Billing
     nif: Optional[str] = None
     address: Optional[str] = None
@@ -50,6 +52,8 @@ class CompanyRead(BaseModel):
     is_trial: bool = False
     max_fichajes: Optional[int] = None
     fichaje_count: int = 0   # total fichajes used (populated by router)
+    docs_enabled: bool = False
+    max_storage_mb: int = 100
     # Billing
     nif: Optional[str] = None
     address: Optional[str] = None
