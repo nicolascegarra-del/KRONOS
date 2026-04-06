@@ -20,3 +20,4 @@ class Document(SQLModel, table=True):
     uploaded_at: datetime = Field(default_factory=datetime.utcnow)
     category: Optional[str] = Field(default=None)    # nomina | contrato | otros
     description: Optional[str] = Field(default=None)
+    is_read: bool = Field(default=False)              # worker has opened/viewed this doc

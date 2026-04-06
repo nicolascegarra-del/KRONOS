@@ -15,6 +15,7 @@ class DocumentOut(BaseModel):
     description: Optional[str] = None
     user_id: Optional[UUID] = None
     worker_name: Optional[str] = None   # populated by router join
+    is_read: bool = False
 
     model_config = {"from_attributes": True}
 

@@ -106,6 +106,45 @@ async def get_storage_usage(
     return _storage_usage(used, company.max_storage_mb or 100)
 
 
+# ── Worker: unread count (for nav badge) ─────────────────────────────────────
+
+@router.get("/unread-count")
+async def get_unread_count(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if not current_user.company_id:
+        return {"count": 0}
+    result = await session.execute(
+        select(func.count(Document.id))
+        .where(
+            Document.company_id == current_user.company_id,
+            Document.user_id == current_user.id,
+            Document.is_read == False,
+        )
+    )
+    return {"count": result.scalar_one()}
+
+
+# ── Worker: mark document as read ─────────────────────────────────────────────
+
+@router.post("/{document_id}/mark-read", status_code=status.HTTP_200_OK)
+async def mark_document_read(
+    document_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(select(Document).where(Document.id == document_id))
+    doc = result.scalar_one_or_none()
+    if not doc or doc.company_id != current_user.company_id or doc.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento no encontrado")
+    if not doc.is_read:
+        doc.is_read = True
+        session.add(doc)
+        await session.commit()
+    return {"ok": True}
+
+
 # ── Worker: own documents ─────────────────────────────────────────────────────
 
 @router.get("/my", response_model=List[DocumentOut])
@@ -133,6 +172,7 @@ async def list_my_documents(
         category=d.category,
         description=d.description,
         user_id=d.user_id,
+        is_read=d.is_read,
     ) for d in docs]
 
 

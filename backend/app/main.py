@@ -113,6 +113,7 @@ async def _run_column_migrations() -> None:
         'CREATE INDEX IF NOT EXISTS ix_document_company_id ON document (company_id)',
         'CREATE INDEX IF NOT EXISTS ix_document_user_id ON document (user_id)',
         'CREATE INDEX IF NOT EXISTS ix_document_company_date ON document (company_id, uploaded_at DESC)',
+        'ALTER TABLE document ADD COLUMN IF NOT EXISTS is_read BOOLEAN NOT NULL DEFAULT false',
     ]
 
     for _sql in _migrations:

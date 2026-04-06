@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 
 interface Features { schedule_enabled: boolean; vacation_enabled: boolean; docs_enabled: boolean; }
+interface UnreadCount { count: number; }
 
 const BASE_NAV = [
   { href: "/worker/dashboard", label: "Inicio", icon: LayoutDashboard, feature: null },
@@ -29,9 +30,15 @@ export default function WorkerLayout({
   const { user, logout, setUser } = useAuthStore();
   const [acceptingNotice, setAcceptingNotice] = useState(false);
   const [features, setFeatures] = useState<Features>({ schedule_enabled: true, vacation_enabled: true, docs_enabled: false });
+  const [unreadDocs, setUnreadDocs] = useState(0);
 
   useEffect(() => {
-    api.get<Features>("/companies/features").then((r) => setFeatures(r.data)).catch(() => {});
+    api.get<Features>("/companies/features").then((r) => {
+      setFeatures(r.data);
+      if (r.data.docs_enabled) {
+        api.get<UnreadCount>("/documents/unread-count").then((u) => setUnreadDocs(u.data.count)).catch(() => {});
+      }
+    }).catch(() => {});
   }, []);
 
   const navItems = BASE_NAV.filter(
@@ -114,21 +121,31 @@ export default function WorkerLayout({
       {/* Bottom navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t">
         <div className="flex">
-          {navItems.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "flex-1 flex flex-col items-center py-3 text-xs font-medium transition-colors",
-                pathname === href
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Icon className="w-5 h-5 mb-1" />
-              {label}
-            </Link>
-          ))}
+          {navItems.map(({ href, label, icon: Icon }) => {
+            const badge = href === "/worker/documents" && unreadDocs > 0 ? unreadDocs : 0;
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  "flex-1 flex flex-col items-center py-3 text-xs font-medium transition-colors",
+                  pathname === href
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <span className="relative">
+                  <Icon className="w-5 h-5 mb-1" />
+                  {badge > 0 && (
+                    <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                      {badge > 9 ? "9+" : badge}
+                    </span>
+                  )}
+                </span>
+                {label}
+              </Link>
+            );
+          })}
         </div>
       </nav>
     </div>
