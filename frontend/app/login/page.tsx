@@ -230,16 +230,22 @@ export default function LoginPage() {
         className="flex flex-col flex-1 lg:items-center lg:justify-center"
         style={{ backgroundColor: "#F0F4FA" }}
       >
-        {/* Mobile header — logo centrado sobre fondo navy */}
+        {/* Mobile header — logo + tagline sobre fondo navy */}
         <div
-          className="lg:hidden flex items-center justify-center py-8 px-6"
+          className="lg:hidden flex flex-col items-center justify-center pt-10 pb-8 px-8 text-center"
           style={{ backgroundColor: "#051937" }}
         >
           <img
             src="/logo_kronos_white.png"
             alt="KRONOS by Klyp"
-            className="h-10 w-auto object-contain"
+            className="h-11 w-auto object-contain mb-4"
           />
+          <p className="text-sm font-semibold" style={{ color: "#E8EDF5", opacity: 0.9 }}>
+            Plataforma integral para RRHH
+          </p>
+          <p className="mt-1 text-xs leading-relaxed max-w-xs" style={{ color: "#E8EDF5", opacity: 0.55 }}>
+            Fichajes · Geolocalización · Vacaciones · Turnos · Documentos
+          </p>
         </div>
 
         {/* Form area */}
