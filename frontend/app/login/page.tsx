@@ -178,21 +178,14 @@ export default function LoginPage() {
           aria-hidden="true"
         />
 
-        {/* Logo */}
-        <div className="relative z-10">
-          <img
-            src="/logo.png"
-            alt="KRONOS by Klyp"
-            className="h-10 w-auto object-contain"
-          />
-        </div>
-
-        {/* Hero text — hidden on small screens (shown in right panel instead) */}
+        {/* Hero — logo + subtítulo */}
         <div className="relative z-10 mt-10 lg:mt-0">
-          <h1 className="text-4xl lg:text-5xl font-bold text-white leading-tight">
-            KRONOS
-          </h1>
-          <p className="mt-3 text-base lg:text-lg font-medium" style={{ color: "#E8EDF5", opacity: 0.85 }}>
+          <img
+            src="/logo_kronos_white.png"
+            alt="KRONOS by Klyp"
+            className="w-full max-w-[280px] lg:max-w-[320px] h-auto object-contain mb-8"
+          />
+          <p className="text-base lg:text-lg font-medium" style={{ color: "#E8EDF5", opacity: 0.85 }}>
             Plataforma integral para RRHH
           </p>
           <p className="mt-2 text-sm leading-relaxed max-w-sm" style={{ color: "#E8EDF5", opacity: 0.6 }}>
@@ -236,7 +229,7 @@ export default function LoginPage() {
       >
         <div className="w-full max-w-sm">
           {/* Heading */}
-          <div className="mb-7">
+          <div className="mb-7 text-center">
             <h2 className="text-2xl font-bold" style={{ color: "#051937" }}>
               Bienvenido
             </h2>
