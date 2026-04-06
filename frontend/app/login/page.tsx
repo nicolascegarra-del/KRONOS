@@ -159,63 +159,67 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
 
-      {/* ── Left panel: branding ─────────────────────────────────────────── */}
+      {/* ── Left panel: branding (desktop only) ────────────────────────── */}
       <div
-        className="relative flex flex-col justify-between overflow-hidden
-                   lg:w-[55%] lg:min-h-screen
-                   px-8 py-8 lg:px-14 lg:py-12"
+        className="hidden lg:flex flex-col overflow-hidden relative
+                   lg:w-[55%] lg:min-h-screen"
         style={{ backgroundColor: "#051937" }}
       >
         {/* Decorative circles */}
         <div
-          className="absolute -top-24 -right-24 w-72 h-72 rounded-full opacity-10"
+          className="absolute -top-24 -right-24 w-72 h-72 rounded-full opacity-10 pointer-events-none"
           style={{ backgroundColor: "#2E6DB4" }}
           aria-hidden="true"
         />
         <div
-          className="absolute -bottom-28 -left-20 w-80 h-80 rounded-full opacity-10"
+          className="absolute -bottom-28 -left-20 w-80 h-80 rounded-full opacity-10 pointer-events-none"
           style={{ backgroundColor: "#2E6DB4" }}
           aria-hidden="true"
         />
 
-        {/* Hero — logo + subtítulo */}
-        <div className="relative z-10 mt-10 lg:mt-0">
+        {/* Logo — top-left absolute */}
+        <div className="absolute top-10 left-14 z-10">
           <img
             src="/logo_kronos_white.png"
             alt="KRONOS by Klyp"
-            className="w-full max-w-[280px] lg:max-w-[320px] h-auto object-contain mb-8"
+            className="h-12 w-auto object-contain"
           />
-          <p className="text-base lg:text-lg font-medium" style={{ color: "#E8EDF5", opacity: 0.85 }}>
-            Plataforma integral para RRHH
-          </p>
-          <p className="mt-2 text-sm leading-relaxed max-w-sm" style={{ color: "#E8EDF5", opacity: 0.6 }}>
-            Control de fichajes · Geolocalización · Gestión de vacaciones ·
-            Calendario de turnos · Envío de documentos a trabajadores
-          </p>
-
-          {/* Feature list */}
-          <ul className="mt-8 space-y-4">
-            {FEATURES.map(({ icon: Icon, title, desc }) => (
-              <li key={title} className="flex items-start gap-3">
-                <span
-                  className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg"
-                  style={{ backgroundColor: "rgba(46,109,180,0.25)" }}
-                >
-                  <Icon className="w-4 h-4" style={{ color: "#E8EDF5" }} aria-hidden="true" />
-                </span>
-                <div>
-                  <p className="text-sm font-semibold text-white">{title}</p>
-                  <p className="text-xs mt-0.5" style={{ color: "#E8EDF5", opacity: 0.6 }}>{desc}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
         </div>
 
-        {/* Footer */}
-        <div className="relative z-10 mt-10 lg:mt-0 flex items-center gap-2">
+        {/* Main content — vertically centered */}
+        <div className="relative z-10 flex-1 flex items-center px-14">
+          <div>
+            <p className="text-lg font-semibold mb-1" style={{ color: "#E8EDF5", opacity: 0.9 }}>
+              Plataforma integral para RRHH
+            </p>
+            <p className="text-sm leading-relaxed max-w-sm mb-10" style={{ color: "#E8EDF5", opacity: 0.55 }}>
+              Control de fichajes · Geolocalización · Gestión de vacaciones ·
+              Calendario de turnos · Envío de documentos a trabajadores
+            </p>
+
+            <ul className="space-y-5">
+              {FEATURES.map(({ icon: Icon, title, desc }) => (
+                <li key={title} className="flex items-start gap-3">
+                  <span
+                    className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg"
+                    style={{ backgroundColor: "rgba(46,109,180,0.25)" }}
+                  >
+                    <Icon className="w-4 h-4" style={{ color: "#E8EDF5" }} aria-hidden="true" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{title}</p>
+                    <p className="text-xs mt-0.5" style={{ color: "#E8EDF5", opacity: 0.55 }}>{desc}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        {/* Footer — bottom absolute */}
+        <div className="absolute bottom-8 left-14 right-14 z-10 flex items-center gap-2">
           <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#2E6DB4" }} aria-hidden="true" />
-          <p className="text-xs" style={{ color: "#E8EDF5", opacity: 0.45 }}>
+          <p className="text-xs" style={{ color: "#E8EDF5", opacity: 0.4 }}>
             © {new Date().getFullYear()} KRONOS by Klyp · Cumple Art. 34.9 ET (RDL 8/2019) · RGPD
           </p>
         </div>
@@ -223,10 +227,23 @@ export default function LoginPage() {
 
       {/* ── Right panel: login form ──────────────────────────────────────── */}
       <div
-        className="flex flex-col items-center justify-center flex-1
-                   px-6 py-10 lg:px-16"
+        className="flex flex-col flex-1 lg:items-center lg:justify-center"
         style={{ backgroundColor: "#F0F4FA" }}
       >
+        {/* Mobile header — logo centrado sobre fondo navy */}
+        <div
+          className="lg:hidden flex items-center justify-center py-8 px-6"
+          style={{ backgroundColor: "#051937" }}
+        >
+          <img
+            src="/logo_kronos_white.png"
+            alt="KRONOS by Klyp"
+            className="h-10 w-auto object-contain"
+          />
+        </div>
+
+        {/* Form area */}
+        <div className="flex-1 lg:flex-none flex items-center justify-center w-full px-6 py-8 lg:px-16">
         <div className="w-full max-w-sm">
           {/* Heading */}
           <div className="mb-7 text-center">
@@ -344,6 +361,7 @@ export default function LoginPage() {
           {/* PWA instructions */}
           <PwaInstructions />
         </div>
+        </div>{/* end form area */}
       </div>
     </div>
   );
