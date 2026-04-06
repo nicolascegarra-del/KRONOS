@@ -260,6 +260,14 @@ async def _cleanup_loop() -> None:
 
             if deleted_tokens or deleted_logs:
                 print(f"[cleanup] Removed {deleted_tokens} expired tokens, {deleted_logs} old access logs")
+
+            # Log memory usage so production trends are visible in Coolify logs
+            try:
+                import resource
+                mem_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+                print(f"[cleanup] Memory RSS: {mem_mb:.0f} MB")
+            except Exception:
+                pass
         except Exception as exc:
             print(f"[cleanup] Error: {exc}")
         await asyncio.sleep(86400)  # run once per day

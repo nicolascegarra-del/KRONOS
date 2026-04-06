@@ -2,8 +2,6 @@ import io
 import csv
 from typing import BinaryIO
 
-import pandas as pd
-
 
 CSV_TEMPLATE_HEADERS = ["email", "full_name", "password", "scheduled_start"]
 CSV_TEMPLATE_EXAMPLE = [
@@ -22,6 +20,7 @@ def generate_csv_template() -> bytes:
 
 def parse_workers_csv(file_content: bytes) -> list[dict]:
     """Parse CSV or Excel file, return list of dicts with worker data."""
+    import pandas as pd  # lazy import — pandas is heavy (~150 MB RSS), only needed here
     # Try Excel first, fall back to CSV
     try:
         df = pd.read_excel(io.BytesIO(file_content))

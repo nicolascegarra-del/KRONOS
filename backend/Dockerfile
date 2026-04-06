@@ -12,4 +12,4 @@ COPY . .
 HEALTHCHECK --interval=10s --timeout=5s --start-period=45s --retries=8 \
   CMD curl -f http://127.0.0.1:8000/health || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--loop", "uvloop"]
+CMD ["gunicorn", "app.main:app", "--worker-class", "uvicorn.workers.UvicornWorker", "--workers", "1", "--bind", "0.0.0.0:8000", "--timeout", "120", "--graceful-timeout", "30", "--keepalive", "5", "--max-requests", "500", "--max-requests-jitter", "100"]
