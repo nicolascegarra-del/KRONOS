@@ -177,18 +177,14 @@ export default function LoginPage() {
           aria-hidden="true"
         />
 
-        {/* Logo — top-left absolute */}
-        <div className="absolute top-10 left-14 z-10">
-          <img
-            src="/logo_kronos_white.png"
-            alt="KRONOS by Klyp"
-            className="w-full max-w-[260px] h-auto object-contain"
-          />
-        </div>
-
-        {/* Main content — vertically centered */}
+        {/* Logo + content — centrados juntos verticalmente */}
         <div className="relative z-10 flex-1 flex items-center px-14">
           <div>
+            <img
+              src="/logo_kronos_white.png"
+              alt="KRONOS by Klyp"
+              className="w-full max-w-[260px] h-auto object-contain mb-8"
+            />
             <p className="text-lg font-semibold mb-1" style={{ color: "#E8EDF5", opacity: 0.9 }}>
               Plataforma integral para RRHH
             </p>
