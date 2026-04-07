@@ -33,11 +33,24 @@ export default function WorkerLayout({
   const [unreadDocs, setUnreadDocs] = useState(0);
 
   useEffect(() => {
-    api.get<Features>("/companies/features").then((r) => {
-      setFeatures(r.data);
-      if (r.data.docs_enabled) {
+    const CACHE_KEY = "company_features";
+    const CACHE_TTL = 5 * 60 * 1000; // 5 min
+    const applyFeatures = (f: Features) => {
+      setFeatures(f);
+      if (f.docs_enabled) {
         api.get<UnreadCount>("/documents/unread-count").then((u) => setUnreadDocs(u.data.count)).catch(() => {});
       }
+    };
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY);
+      if (raw) {
+        const { data, ts } = JSON.parse(raw);
+        if (Date.now() - ts < CACHE_TTL) { applyFeatures(data); return; }
+      }
+    } catch { /* ignore */ }
+    api.get<Features>("/companies/features").then((r) => {
+      try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data: r.data, ts: Date.now() })); } catch { /* ignore */ }
+      applyFeatures(r.data);
     }).catch(() => {});
   }, []);
 

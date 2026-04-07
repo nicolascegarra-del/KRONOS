@@ -19,18 +19,23 @@ async def _auto_close_loop() -> None:
     await asyncio.sleep(60)  # wait for DB to be ready
     while True:
         try:
-            from sqlalchemy import select
-            from app.database import AsyncSessionLocal
-            from app.models.app_settings import AppSettings
-            from app.routers.fichajes import _close_open_fichajes
+            async def _do_auto_close() -> None:
+                from sqlalchemy import select
+                from app.database import AsyncSessionLocal
+                from app.models.app_settings import AppSettings
+                from app.routers.fichajes import _close_open_fichajes
 
-            async with AsyncSessionLocal() as session:
-                result = await session.execute(select(AppSettings).where(AppSettings.id == 1))
-                cfg = result.scalar_one_or_none()
-                if cfg and cfg.auto_close_enabled and cfg.auto_close_hours > 0:
-                    closed = await _close_open_fichajes(session, max_hours=cfg.auto_close_hours)
-                    if closed:
-                        print(f"[auto-close] Closed {closed} fichaje(s) open > {cfg.auto_close_hours}h")
+                async with AsyncSessionLocal() as session:
+                    result = await session.execute(select(AppSettings).where(AppSettings.id == 1))
+                    cfg = result.scalar_one_or_none()
+                    if cfg and cfg.auto_close_enabled and cfg.auto_close_hours > 0:
+                        closed = await _close_open_fichajes(session, max_hours=cfg.auto_close_hours)
+                        if closed:
+                            print(f"[auto-close] Closed {closed} fichaje(s) open > {cfg.auto_close_hours}h")
+
+            await asyncio.wait_for(_do_auto_close(), timeout=60.0)
+        except asyncio.TimeoutError:
+            print("[auto-close] Timeout after 60s — skipping cycle")
         except Exception as exc:
             print(f"[auto-close] Error: {exc}")
         await asyncio.sleep(_AUTO_CLOSE_INTERVAL)
@@ -117,6 +122,8 @@ async def _run_column_migrations() -> None:
         # split/partido schedules
         'ALTER TABLE worker_schedule ADD COLUMN IF NOT EXISTS start_time_2 TIME',
         'ALTER TABLE worker_schedule ADD COLUMN IF NOT EXISTS end_time_2 TIME',
+        # performance: compound index for document queries filtered by worker
+        'CREATE INDEX IF NOT EXISTS ix_document_company_user_date ON document (company_id, user_id, uploaded_at DESC)',
     ]
 
     for _sql in _migrations:
@@ -192,18 +199,25 @@ async def _send_monthly_reports(now: "datetime") -> None:
             )
         )
         workers = workers_result.scalars().all()
+        if not workers:
+            return
+
+        # Load ALL fichajes for ALL workers in 1 query, then group in memory
+        worker_ids = [w.id for w in workers]
+        fichajes_result = await session.execute(
+            select(Fichaje).where(
+                Fichaje.user_id.in_(worker_ids),
+                Fichaje.start_time >= month_start,
+                Fichaje.start_time <= month_end,
+                Fichaje.is_deleted == False,
+            ).order_by(Fichaje.start_time)
+        )
+        fichajes_by_worker: dict = {}
+        for f in fichajes_result.scalars().all():
+            fichajes_by_worker.setdefault(f.user_id, []).append(f)
 
         async def _send_one(worker):
-            fichajes_result = await session.execute(
-                select(Fichaje).where(
-                    Fichaje.user_id == worker.id,
-                    Fichaje.start_time >= month_start,
-                    Fichaje.start_time <= month_end,
-                    Fichaje.is_deleted == False,
-                ).order_by(Fichaje.start_time)
-            )
-            fichajes = fichajes_result.scalars().all()
-
+            fichajes = fichajes_by_worker.get(worker.id, [])
             rows = []
             for f in fichajes:
                 rows.append({

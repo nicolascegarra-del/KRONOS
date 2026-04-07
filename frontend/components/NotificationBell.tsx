@@ -18,7 +18,7 @@ const POLL_MS = 60_000;
 export default function NotificationBell() {
   const [alerts, setAlerts] = useState<LateAlert[]>([]);
   const [open, setOpen] = useState(false);
-  const [notifiedIds, setNotifiedIds] = useState<Set<string>>(new Set());
+  const notifiedIdsRef = useRef<Set<string>>(new Set());
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchAlerts = useCallback(async () => {
@@ -35,20 +35,20 @@ export default function NotificationBell() {
       ) {
         incoming.forEach((alert) => {
           const key = `${alert.user_id}-${alert.type}`;
-          if (!notifiedIds.has(key)) {
+          if (!notifiedIdsRef.current.has(key)) {
             const label =
               alert.type === "absent"
                 ? `${alert.full_name} no ha fichado (${alert.minutes_late} min tarde)`
                 : `${alert.full_name} llegó ${alert.minutes_late} min tarde`;
             new Notification("Fichajes — Alerta", { body: label });
-            setNotifiedIds((prev) => new Set(prev).add(key));
+            notifiedIdsRef.current.add(key);
           }
         });
       }
     } catch {
       // silently ignore — user may not be logged in yet
     }
-  }, [notifiedIds]);
+  }, []);
 
   // Request permission once on mount
   useEffect(() => {

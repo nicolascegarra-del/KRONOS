@@ -2,6 +2,7 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    command: postgres -c max_connections=50 -c shared_buffers=128MB -c effective_cache_size=256MB
     volumes:
       - pgdata:/var/lib/postgresql/data
     environment:
@@ -13,14 +14,14 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    mem_limit: 768m
+    mem_limit: 512m
     mem_reservation: 128m
     networks:
       - default
 
   backend:
     build: ./backend
-    restart: always
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
@@ -40,7 +41,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
-    mem_limit: 1024m
+    mem_limit: 896m
     mem_reservation: 192m
     networks:
       - default
@@ -51,7 +52,7 @@ services:
       context: ./frontend
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-    restart: always
+    restart: unless-stopped
     depends_on:
       backend:
         condition: service_healthy
@@ -63,15 +64,26 @@ services:
       timeout: 5s
       retries: 5
       start_period: 45s
-    mem_limit: 1024m
+    mem_limit: 640m
     mem_reservation: 256m
     networks:
       - default
       - coolify
 
+# ─── Volumes ──────────────────────────────────────────────────────────────────
+# external: true + name fijo evita que Coolify cree volúmenes nuevos en cada
+# redeploy (cada proyecto Coolify tiene un UUID diferente en el prefijo).
+# Crear 1 vez en el servidor:
+#   docker volume create kronos_pgdata
+#   docker volume create kronos_storage_data
+# Migrar datos del volumen anterior si es necesario (ver README o CLAUDE.md).
 volumes:
   pgdata:
+    external: true
+    name: kronos_pgdata
   storage_data:
+    external: true
+    name: kronos_storage_data
 
 networks:
   default:

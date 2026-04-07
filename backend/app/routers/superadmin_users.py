@@ -54,10 +54,15 @@ async def create_user(
 
 @router.get("", response_model=list[UserRead])
 async def list_all_users(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=100),
     _sa: User = Depends(require_superadmin),
     session: AsyncSession = Depends(get_session),
 ):
-    result = await session.execute(select(User).order_by(User.created_at))
+    offset = (page - 1) * page_size
+    result = await session.execute(
+        select(User).order_by(User.created_at).offset(offset).limit(page_size)
+    )
     users = result.scalars().all()
 
     # Build company name lookup
@@ -188,16 +193,13 @@ async def bulk_delete_users(
     # Delete admin access logs for these users (admin_id FK, non-nullable)
     await session.execute(delete(AdminAccessLog).where(AdminAccessLog.admin_id.in_(body.user_ids)))
 
-    schedule_result = await session.execute(
-        select(WorkerSchedule).where(WorkerSchedule.user_id.in_(body.user_ids))
-    )
-    for ws in schedule_result.scalars().all():
-        await session.delete(ws)
+    await session.execute(delete(WorkerSchedule).where(WorkerSchedule.user_id.in_(body.user_ids)))
 
-    users_result = await session.execute(select(User).where(User.id.in_(body.user_ids)))
-    users = users_result.scalars().all()
-    for u in users:
-        await session.delete(u)
+    count_result = await session.execute(
+        select(User).where(User.id.in_(body.user_ids))
+    )
+    deleted_count = len(count_result.scalars().all())
+    await session.execute(delete(User).where(User.id.in_(body.user_ids)))
 
     await session.commit()
-    return {"deleted": len(users)}
+    return {"deleted": deleted_count}

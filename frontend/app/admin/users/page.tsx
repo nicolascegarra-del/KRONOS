@@ -175,7 +175,6 @@ export default function UsersPage() {
     setCalYear(year)
     setCalMonth(month)
     loadScheduleMonth(user.id, year, month)
-    api.get<Features>("/companies/features").then((r) => setFeatures(r.data)).catch(() => {})
     setShowScheduleDialog(true)
   }
 

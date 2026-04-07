@@ -246,7 +246,7 @@ export default function AdminDashboard() {
       api.get<{ vacation_enabled: boolean }>("/companies/features"),
       // Fetch all today's fichajes for the geo map (no status filter, higher limit)
       api.get<{ items: FichajeAdminItem[]; total: number }>(
-        `/fichajes/admin?from_date=${today}&to_date=${today}&limit=200`
+        `/fichajes/admin?from_date=${today}&to_date=${today}&limit=50`
       ),
     ]);
 

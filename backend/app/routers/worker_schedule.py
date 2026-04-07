@@ -102,14 +102,17 @@ async def upsert_worker_schedule(
 
     saved: list[WorkerScheduleDay] = []
 
+    # Load all affected schedule rows in 1 query instead of 1 per day
+    dates = [d.schedule_date for d in payload.days]
+    existing_result = await session.execute(
+        select(WorkerSchedule)
+        .where(WorkerSchedule.user_id == user_id)
+        .where(WorkerSchedule.schedule_date.in_(dates))
+    )
+    existing_by_date = {r.schedule_date: r for r in existing_result.scalars().all()}
+
     for day in payload.days:
-        # Find existing row
-        result = await session.execute(
-            select(WorkerSchedule)
-            .where(WorkerSchedule.user_id == user_id)
-            .where(WorkerSchedule.schedule_date == day.schedule_date)
-        )
-        existing = result.scalars().first()
+        existing = existing_by_date.get(day.schedule_date)
 
         if day.start_time is None and day.end_time is None:
             # Delete if exists
