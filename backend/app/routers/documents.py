@@ -268,6 +268,17 @@ async def bulk_upload(
             detail="El módulo de documentos no está activado para esta empresa",
         )
 
+    # Check document count limit (trial plans)
+    if company.max_documents is not None:
+        doc_count_result = await session.execute(
+            select(func.count(Document.id)).where(Document.company_id == company.id)
+        )
+        if doc_count_result.scalar_one() >= company.max_documents:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Límite de {company.max_documents} documentos alcanzado en tu plan actual",
+            )
+
     # Load all workers with DNI for batch lookup
     workers_result = await session.execute(
         select(User.id, User.full_name, User.dni)

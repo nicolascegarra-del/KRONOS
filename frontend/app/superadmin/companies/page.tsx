@@ -42,6 +42,10 @@ interface CompanyRead {
   subscription_discount?: number;
   subscription_start?: string;
   subscription_end?: string;
+  // Plan tier
+  plan_tier?: string | null;
+  max_documents?: number | null;
+  max_vacation_requests?: number | null;
 }
 
 interface CreateForm {
@@ -52,9 +56,44 @@ interface CreateForm {
   admin_password: string;
 }
 
+// ── Plan definitions (mirror of backend PLAN_MODULES) ────────────────────────
+const PLAN_MODULES: Record<string, { geo_enabled: boolean; schedule_enabled: boolean; vacation_enabled: boolean; docs_enabled: boolean }> = {
+  basico: { geo_enabled: true, schedule_enabled: false, vacation_enabled: false, docs_enabled: false },
+  pro:    { geo_enabled: true, schedule_enabled: true,  vacation_enabled: false, docs_enabled: false },
+  hr:     { geo_enabled: true, schedule_enabled: true,  vacation_enabled: true,  docs_enabled: false },
+  total:  { geo_enabled: true, schedule_enabled: true,  vacation_enabled: true,  docs_enabled: true  },
+}
+
+const PLAN_LABELS: Record<string, string> = {
+  trial:        "Trial (gratuito)",
+  basico:       "Básico — €15/mes",
+  pro:          "Pro — €25/mes",
+  hr:           "HR — €35/mes",
+  total:        "Total — €45/mes",
+  personalizado:"Personalizado",
+}
+
+const PLAN_COLORS: Record<string, string> = {
+  trial:        "bg-amber-100 text-amber-700",
+  basico:       "bg-slate-100 text-slate-600",
+  pro:          "bg-green-100 text-green-700",
+  hr:           "bg-blue-100 text-blue-700",
+  total:        "bg-purple-100 text-purple-700",
+  personalizado:"bg-orange-100 text-orange-700",
+}
+
+function inferPlan(geo: boolean, schedule: boolean, vacation: boolean, docs: boolean): string {
+  for (const [plan, mods] of Object.entries(PLAN_MODULES)) {
+    if (mods.geo_enabled === geo && mods.schedule_enabled === schedule &&
+        mods.vacation_enabled === vacation && mods.docs_enabled === docs) return plan
+  }
+  return "personalizado"
+}
+
 interface EditForm {
   name: string;
   max_workers: number;
+  plan_tier: string;
   geo_enabled: boolean;
   schedule_enabled: boolean;
   vacation_enabled: boolean;
@@ -102,7 +141,7 @@ export default function CompaniesPage() {
 
   // Edit dialog
   const [editTarget, setEditTarget] = useState<CompanyRead | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({ name: "", max_workers: 10, geo_enabled: true, schedule_enabled: true, vacation_enabled: true, is_trial: false, max_fichajes: "", docs_enabled: false, max_storage_mb: "100", nif: "", address: "", city: "", postal_code: "", phone: "", billing_email: "" });
+  const [editForm, setEditForm] = useState<EditForm>({ name: "", max_workers: 10, plan_tier: "", geo_enabled: true, schedule_enabled: true, vacation_enabled: true, is_trial: false, max_fichajes: "", docs_enabled: false, max_storage_mb: "100", nif: "", address: "", city: "", postal_code: "", phone: "", billing_email: "" });
   const [editError, setEditError] = useState<string | null>(null);
   const [editLoading, setEditLoading] = useState(false);
 
@@ -203,6 +242,7 @@ export default function CompaniesPage() {
     setEditForm({
       name: c.name,
       max_workers: c.max_workers,
+      plan_tier: c.plan_tier ?? inferPlan(c.geo_enabled, c.schedule_enabled, c.vacation_enabled, c.docs_enabled ?? false),
       geo_enabled: c.geo_enabled,
       schedule_enabled: c.schedule_enabled,
       vacation_enabled: c.vacation_enabled,
@@ -235,6 +275,7 @@ export default function CompaniesPage() {
     try {
       await api.put(`/companies/${editTarget.id}`, {
         ...editForm,
+        plan_tier: editForm.plan_tier || null,
         max_fichajes: editForm.max_fichajes === "" ? 0 : parseInt(editForm.max_fichajes, 10),
         max_storage_mb: parseInt(editForm.max_storage_mb, 10) || 100,
       });
@@ -362,11 +403,14 @@ export default function CompaniesPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-semibold">{c.name}</p>
-                        {c.is_trial && (
-                          <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
-                            FREE TRIAL
-                          </span>
-                        )}
+                        {(() => {
+                          const tier = c.plan_tier ?? inferPlan(c.geo_enabled, c.schedule_enabled, c.vacation_enabled, c.docs_enabled ?? false)
+                          return (
+                            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${PLAN_COLORS[tier] ?? "bg-slate-100 text-slate-600"}`}>
+                              {tier.toUpperCase()}
+                            </span>
+                          )
+                        })()}
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {c.worker_count} / {c.max_workers} trabajadores ·{" "}
@@ -604,8 +648,36 @@ export default function CompaniesPage() {
               </div>
             </div>
 
+            {/* Plan selector */}
+            <div className="space-y-3 rounded-lg border p-3 bg-slate-50">
+              <p className="text-sm font-semibold">Plan de suscripción</p>
+              <select
+                value={editForm.plan_tier}
+                onChange={(e) => {
+                  const tier = e.target.value
+                  if (tier === "trial") {
+                    setEditForm((f) => ({ ...f, plan_tier: "trial", is_trial: true, max_workers: 2, max_fichajes: "60", geo_enabled: true, schedule_enabled: true, vacation_enabled: true, docs_enabled: true }))
+                  } else if (PLAN_MODULES[tier]) {
+                    setEditForm((f) => ({ ...f, plan_tier: tier, is_trial: false, ...PLAN_MODULES[tier] }))
+                  } else {
+                    setEditForm((f) => ({ ...f, plan_tier: tier }))
+                  }
+                }}
+                className="flex h-9 w-full rounded-md border border-input bg-white px-3 py-1 text-sm shadow-sm"
+              >
+                <option value="">— Sin asignar —</option>
+                {Object.entries(PLAN_LABELS).map(([tier, label]) => (
+                  <option key={tier} value={tier}>{label}</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Cambiar el plan actualiza los módulos automáticamente. También puedes cambiar los módulos manualmente.
+              </p>
+            </div>
+
+            {/* Module toggles */}
             <div className="space-y-2">
-              <p className="text-sm font-medium">Funcionalidades</p>
+              <p className="text-sm font-medium">Módulos activos</p>
               {[
                 { key: "geo_enabled" as const, label: "Geolocalización", desc: "Control de presencia por GPS en fichajes." },
                 { key: "schedule_enabled" as const, label: "Cuadrante de turnos", desc: "El admin gestiona el horario anual de cada trabajador." },
@@ -618,7 +690,10 @@ export default function CompaniesPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setEditForm((f) => ({ ...f, [key]: !f[key] }))}
+                    onClick={() => setEditForm((f) => {
+                      const next = { ...f, [key]: !f[key] }
+                      return { ...next, plan_tier: inferPlan(next.geo_enabled, next.schedule_enabled, next.vacation_enabled, next.docs_enabled) }
+                    })}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editForm[key] ? "bg-primary" : "bg-slate-200"}`}
                   >
                     <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${editForm[key] ? "translate-x-6" : "translate-x-1"}`} />
@@ -634,7 +709,10 @@ export default function CompaniesPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setEditForm((f) => ({ ...f, docs_enabled: !f.docs_enabled }))}
+                    onClick={() => setEditForm((f) => {
+                      const next = { ...f, docs_enabled: !f.docs_enabled }
+                      return { ...next, plan_tier: inferPlan(next.geo_enabled, next.schedule_enabled, next.vacation_enabled, next.docs_enabled) }
+                    })}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editForm.docs_enabled ? "bg-primary" : "bg-slate-200"}`}
                   >
                     <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${editForm.docs_enabled ? "translate-x-6" : "translate-x-1"}`} />
@@ -664,7 +742,6 @@ export default function CompaniesPage() {
                         ))}
                       </div>
                     </div>
-                    <p className="text-xs text-muted-foreground">Trial: 100 MB · Monthly: 1 GB · Annual: 5 GB</p>
                   </div>
                 )}
               </div>

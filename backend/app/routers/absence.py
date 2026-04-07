@@ -3,12 +3,13 @@ from datetime import datetime, date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status as http_status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.dependencies import get_current_user, require_admin
 from app.models.absence import Absence, AbsenceStatus, AbsenceType
+from app.models.company import Company
 from app.models.user import User
 from app.schemas.absence import AbsenceCreate, AbsenceReview, AbsenceOut, VacationSummary
 
@@ -87,6 +88,22 @@ async def create_my_absence(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
+    # Check vacation request limit (trial plans)
+    if current_user.company_id:
+        company_result = await session.execute(
+            select(Company).where(Company.id == current_user.company_id)
+        )
+        company = company_result.scalar_one_or_none()
+        if company and company.max_vacation_requests is not None:
+            count_result = await session.execute(
+                select(func.count(Absence.id)).where(Absence.user_id == current_user.id)
+            )
+            if count_result.scalar_one() >= company.max_vacation_requests:
+                raise HTTPException(
+                    status_code=http_status.HTTP_403_FORBIDDEN,
+                    detail=f"Límite de {company.max_vacation_requests} solicitudes alcanzado en tu plan actual",
+                )
+
     absence = Absence(
         user_id=current_user.id,
         type=body.type,

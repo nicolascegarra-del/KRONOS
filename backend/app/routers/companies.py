@@ -21,6 +21,32 @@ from app.services.email_service import send_email
 
 router = APIRouter(prefix="/companies", tags=["companies"])
 
+# ── Plan definitions ──────────────────────────────────────────────────────────
+
+# Canonical module state for each paid tier (geo always True — free in all plans)
+PLAN_MODULES: dict[str, dict] = {
+    "basico": dict(geo_enabled=True, schedule_enabled=False, vacation_enabled=False, docs_enabled=False),
+    "pro":    dict(geo_enabled=True, schedule_enabled=True,  vacation_enabled=False, docs_enabled=False),
+    "hr":     dict(geo_enabled=True, schedule_enabled=True,  vacation_enabled=True,  docs_enabled=False),
+    "total":  dict(geo_enabled=True, schedule_enabled=True,  vacation_enabled=True,  docs_enabled=True),
+}
+
+# Limits applied when assigning the trial plan
+TRIAL_LIMITS = dict(
+    max_workers=2, max_fichajes=60, max_documents=5, max_vacation_requests=5,
+    geo_enabled=True, schedule_enabled=True, vacation_enabled=True, docs_enabled=True,
+)
+
+
+def infer_plan_tier(geo: bool, schedule: bool, vacation: bool, docs: bool) -> str:
+    """Return the plan name that matches the given module flags, or 'personalizado'."""
+    state = dict(geo_enabled=geo, schedule_enabled=schedule,
+                 vacation_enabled=vacation, docs_enabled=docs)
+    for plan, modules in PLAN_MODULES.items():
+        if modules == state:
+            return plan
+    return "personalizado"
+
 
 async def _worker_count(session: AsyncSession, company_id: UUID) -> int:
     result = await session.execute(
@@ -60,6 +86,9 @@ def _to_read(c: Company, worker_count: int, fichaje_count: int = 0) -> CompanyRe
         subscription_discount=c.subscription_discount,
         subscription_start=c.subscription_start,
         subscription_end=c.subscription_end,
+        plan_tier=c.plan_tier,
+        max_documents=c.max_documents,
+        max_vacation_requests=c.max_vacation_requests,
     )
 
 
@@ -235,12 +264,47 @@ async def update_company(
         company.name = body.name
     if body.max_workers is not None:
         company.max_workers = body.max_workers
-    if body.geo_enabled is not None:
-        company.geo_enabled = body.geo_enabled
-    if body.schedule_enabled is not None:
-        company.schedule_enabled = body.schedule_enabled
-    if body.vacation_enabled is not None:
-        company.vacation_enabled = body.vacation_enabled
+
+    # ── Plan / module logic (bidirectional) ──────────────────────────────────
+    if body.plan_tier is not None:
+        if body.plan_tier == "trial":
+            # Apply trial limits and enable all modules
+            for k, v in TRIAL_LIMITS.items():
+                setattr(company, k, v)
+            company.plan_tier = "trial"
+            company.is_trial = True
+        elif body.plan_tier in PLAN_MODULES:
+            # Apply the canonical module set for the chosen paid tier
+            modules = PLAN_MODULES[body.plan_tier]
+            company.geo_enabled = modules["geo_enabled"]
+            company.schedule_enabled = modules["schedule_enabled"]
+            company.vacation_enabled = modules["vacation_enabled"]
+            company.docs_enabled = modules["docs_enabled"]
+            company.plan_tier = body.plan_tier
+            company.is_trial = False
+            # Clear trial limits on upgrade to paid plan
+            company.max_documents = None
+            company.max_vacation_requests = None
+        elif body.plan_tier == "personalizado":
+            company.plan_tier = "personalizado"
+            company.is_trial = False
+    elif any(f is not None for f in [body.geo_enabled, body.schedule_enabled,
+                                      body.vacation_enabled, body.docs_enabled]):
+        # Modules changed manually → apply them then infer the resulting plan
+        if body.geo_enabled is not None:
+            company.geo_enabled = body.geo_enabled
+        if body.schedule_enabled is not None:
+            company.schedule_enabled = body.schedule_enabled
+        if body.vacation_enabled is not None:
+            company.vacation_enabled = body.vacation_enabled
+        if body.docs_enabled is not None:
+            company.docs_enabled = body.docs_enabled
+        company.plan_tier = infer_plan_tier(
+            company.geo_enabled, company.schedule_enabled,
+            company.vacation_enabled, company.docs_enabled,
+        )
+    # ─────────────────────────────────────────────────────────────────────────
+
     if body.nif is not None:
         company.nif = body.nif
     if body.address is not None:
@@ -263,15 +327,17 @@ async def update_company(
         company.subscription_start = body.subscription_start
     if body.subscription_end is not None:
         company.subscription_end = body.subscription_end
-    if body.is_trial is not None:
+    if body.is_trial is not None and body.plan_tier is None:
         company.is_trial = body.is_trial
     if body.max_fichajes is not None:
         # 0 means remove limit (unlimited)
         company.max_fichajes = None if body.max_fichajes == 0 else body.max_fichajes
-    if body.docs_enabled is not None:
-        company.docs_enabled = body.docs_enabled
     if body.max_storage_mb is not None:
         company.max_storage_mb = body.max_storage_mb
+    if body.max_documents is not None:
+        company.max_documents = None if body.max_documents == 0 else body.max_documents
+    if body.max_vacation_requests is not None:
+        company.max_vacation_requests = None if body.max_vacation_requests == 0 else body.max_vacation_requests
 
     session.add(company)
     await session.commit()

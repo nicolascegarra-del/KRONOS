@@ -45,5 +45,10 @@ class Company(SQLModel, table=True):
     docs_enabled: bool = Field(default=False)
     max_storage_mb: int = Field(default=100)  # storage quota in MB
 
+    # Plan tier (trial | basico | pro | hr | total | personalizado)
+    plan_tier: Optional[str] = Field(default=None)
+    max_documents: Optional[int] = Field(default=None)        # None = unlimited
+    max_vacation_requests: Optional[int] = Field(default=None) # None = unlimited
+
     users: List["User"] = Relationship(back_populates="company")
     work_centers: List["WorkCenter"] = Relationship(back_populates="company")

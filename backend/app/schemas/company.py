@@ -37,6 +37,10 @@ class CompanyUpdate(BaseModel):
     subscription_discount: Optional[float] = None
     subscription_start: Optional[datetime] = None
     subscription_end: Optional[datetime] = None
+    # Plan tier
+    plan_tier: Optional[str] = None
+    max_documents: Optional[int] = None
+    max_vacation_requests: Optional[int] = None
 
 
 class CompanyRead(BaseModel):
@@ -67,6 +71,10 @@ class CompanyRead(BaseModel):
     subscription_discount: Optional[float] = None
     subscription_start: Optional[datetime] = None
     subscription_end: Optional[datetime] = None
+    # Plan tier
+    plan_tier: Optional[str] = None
+    max_documents: Optional[int] = None
+    max_vacation_requests: Optional[int] = None
 
     model_config = {"from_attributes": True}
 

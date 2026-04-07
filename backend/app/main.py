@@ -124,6 +124,10 @@ async def _run_column_migrations() -> None:
         'ALTER TABLE worker_schedule ADD COLUMN IF NOT EXISTS end_time_2 TIME',
         # performance: compound index for document queries filtered by worker
         'CREATE INDEX IF NOT EXISTS ix_document_company_user_date ON document (company_id, user_id, uploaded_at DESC)',
+        # subscription plan tiers
+        'ALTER TABLE company ADD COLUMN IF NOT EXISTS plan_tier VARCHAR',
+        'ALTER TABLE company ADD COLUMN IF NOT EXISTS max_documents INTEGER',
+        'ALTER TABLE company ADD COLUMN IF NOT EXISTS max_vacation_requests INTEGER',
     ]
 
     for _sql in _migrations:
