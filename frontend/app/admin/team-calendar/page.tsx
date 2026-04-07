@@ -172,7 +172,9 @@ export default function TeamCalendarPage() {
     setSyncMsg(null);
     try {
       // Collect unique region codes from visible workers
-      const regions = [...new Set(entries.map((e) => e.region_code).filter(Boolean))] as string[];
+      const regionSet = new Set<string>();
+      for (const e of entries) { if (e.region_code) regionSet.add(e.region_code); }
+      const regions = Array.from(regionSet);
       if (regions.length === 0) {
         setSyncMsg("Ningún trabajador tiene comunidad autónoma asignada.");
         return;
