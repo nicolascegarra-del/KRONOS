@@ -1,5 +1,5 @@
 from uuid import UUID
-from datetime import datetime, time
+from datetime import date, datetime, time
 from typing import Optional
 from pydantic import BaseModel, EmailStr
 
@@ -24,6 +24,13 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     dni: Optional[str] = None
     vacation_days: Optional[int] = None
+    # HR profile
+    position: Optional[str] = None
+    department: Optional[str] = None
+    contract_type: Optional[str] = None
+    contract_start: Optional[date] = None
+    contract_end: Optional[date] = None
+    region_code: Optional[str] = None
 
 
 class SuperadminUserCreate(BaseModel):
@@ -47,6 +54,13 @@ class SuperadminUserUpdate(BaseModel):
     scheduled_end: Optional[time] = None
     is_active: Optional[bool] = None
     company_id: Optional[UUID] = None
+    # HR profile
+    position: Optional[str] = None
+    department: Optional[str] = None
+    contract_type: Optional[str] = None
+    contract_start: Optional[date] = None
+    contract_end: Optional[date] = None
+    region_code: Optional[str] = None
 
 
 class UserRead(BaseModel):
@@ -63,5 +77,12 @@ class UserRead(BaseModel):
     dni: Optional[str] = None
     geo_consent: Optional[bool] = None
     vacation_days: int = 22
+    # HR profile
+    position: Optional[str] = None
+    department: Optional[str] = None
+    contract_type: Optional[str] = None
+    contract_start: Optional[date] = None
+    contract_end: Optional[date] = None
+    region_code: Optional[str] = None
 
     model_config = {"from_attributes": True}

@@ -30,6 +30,7 @@ const BASE_NAV = [
   { href: "/admin/fichajes", label: "Fichajes", icon: Clock, feature: null },
   { href: "/admin/reports", label: "Informes", icon: BarChart2, feature: null },
   { href: "/admin/absences", label: "Ausencias", icon: CalendarRange, feature: "vacation_enabled" },
+  { href: "/admin/team-calendar", label: "Calendario", icon: CalendarRange, feature: "vacation_enabled" },
   { href: "/admin/documents", label: "Documentos", icon: FileText, feature: "docs_enabled" },
   { href: "/admin/work-centers", label: "Centros trabajo", icon: MapPin, feature: null },
   { href: "/admin/pause-types", label: "Tipos pausa", icon: Tag, feature: null },

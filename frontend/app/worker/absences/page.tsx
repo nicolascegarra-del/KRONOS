@@ -14,21 +14,31 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Trash2, CalendarRange, Clock } from "lucide-react";
 
-type AbsenceType = "vacaciones" | "baja_medica" | "permiso" | "otros";
+type AbsenceType = "vacaciones" | "baja_medica" | "permiso" | "otros" | "asuntos_propios" | "maternidad_paternidad" | "lactancia" | "excedencia" | "permiso_no_retribuido";
 type AbsenceStatus = "pending" | "approved" | "rejected";
 
 const TYPE_LABELS: Record<AbsenceType, string> = {
-  vacaciones: "Vacaciones",
-  baja_medica: "Baja médica",
-  permiso: "Permiso",
-  otros: "Otros",
+  vacaciones:            "Vacaciones",
+  baja_medica:           "Baja médica",
+  permiso:               "Permiso retribuido",
+  otros:                 "Otros",
+  asuntos_propios:       "Asuntos propios",
+  maternidad_paternidad: "Maternidad / Paternidad",
+  lactancia:             "Lactancia",
+  excedencia:            "Excedencia",
+  permiso_no_retribuido: "Permiso no retribuido",
 };
 
 const TYPE_COLORS: Record<AbsenceType, string> = {
-  vacaciones: "bg-blue-50 border-blue-200 text-blue-700",
-  baja_medica: "bg-red-50 border-red-200 text-red-700",
-  permiso: "bg-purple-50 border-purple-200 text-purple-700",
-  otros: "bg-slate-50 border-slate-200 text-slate-700",
+  vacaciones:            "bg-blue-50 border-blue-200 text-blue-700",
+  baja_medica:           "bg-red-50 border-red-200 text-red-700",
+  permiso:               "bg-purple-50 border-purple-200 text-purple-700",
+  otros:                 "bg-slate-50 border-slate-200 text-slate-700",
+  asuntos_propios:       "bg-cyan-50 border-cyan-200 text-cyan-700",
+  maternidad_paternidad: "bg-pink-50 border-pink-200 text-pink-700",
+  lactancia:             "bg-rose-50 border-rose-200 text-rose-700",
+  excedencia:            "bg-gray-50 border-gray-200 text-gray-600",
+  permiso_no_retribuido: "bg-orange-50 border-orange-200 text-orange-700",
 };
 
 const STATUS_LABELS: Record<AbsenceStatus, string> = {
@@ -318,23 +328,17 @@ export default function WorkerAbsencesPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label>Tipo</Label>
-              <div className="grid grid-cols-2 gap-2">
+              <Label>Tipo de ausencia</Label>
+              <select
+                value={form.type}
+                onChange={(e) => setForm({ ...form, type: e.target.value as AbsenceType })}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                required
+              >
                 {(Object.keys(TYPE_LABELS) as AbsenceType[]).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setForm({ ...form, type: t })}
-                    className={`text-sm font-medium px-3 py-2 rounded-lg border transition-all ${
-                      form.type === t
-                        ? "border-primary bg-primary/5 text-primary"
-                        : "border-slate-200 text-slate-600 hover:border-slate-300"
-                    }`}
-                  >
-                    {TYPE_LABELS[t]}
-                  </button>
+                  <option key={t} value={t}>{TYPE_LABELS[t]}</option>
                 ))}
-              </div>
+              </select>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

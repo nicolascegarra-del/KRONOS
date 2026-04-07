@@ -7,10 +7,15 @@ from sqlmodel import SQLModel, Field
 
 
 class AbsenceType(str, Enum):
-    vacaciones = "vacaciones"
-    baja_medica = "baja_medica"
-    permiso = "permiso"
-    otros = "otros"
+    vacaciones            = "vacaciones"
+    baja_medica           = "baja_medica"
+    permiso               = "permiso"
+    otros                 = "otros"
+    asuntos_propios       = "asuntos_propios"        # remunerado, requiere aprobación
+    maternidad_paternidad = "maternidad_paternidad"  # remunerado, sin aprobación previa
+    lactancia             = "lactancia"              # remunerado, requiere aprobación
+    excedencia            = "excedencia"             # no remunerado, requiere aprobación
+    permiso_no_retribuido = "permiso_no_retribuido"  # no remunerado, requiere aprobación
 
 
 class AbsenceStatus(str, Enum):

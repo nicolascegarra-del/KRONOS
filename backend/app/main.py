@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import auth, users, fichajes, reports, pause_types, notifications, companies, worker_schedule, work_centers, superadmin_users, invoice_config, worker_export, access_logs, absence, documents
+from app.routers import auth, users, fichajes, reports, pause_types, notifications, companies, worker_schedule, work_centers, superadmin_users, invoice_config, worker_export, access_logs, absence, documents, holidays
 from app.routers import settings as settings_router
 
 app_settings = get_settings()
@@ -128,6 +128,22 @@ async def _run_column_migrations() -> None:
         'ALTER TABLE company ADD COLUMN IF NOT EXISTS plan_tier VARCHAR',
         'ALTER TABLE company ADD COLUMN IF NOT EXISTS max_documents INTEGER',
         'ALTER TABLE company ADD COLUMN IF NOT EXISTS max_vacation_requests INTEGER',
+        # HR profile fields on user
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS position VARCHAR',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS department VARCHAR',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS contract_type VARCHAR',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS contract_start DATE',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS contract_end DATE',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS region_code VARCHAR',
+        # public holidays cache table
+        '''CREATE TABLE IF NOT EXISTS public_holiday (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            region_code VARCHAR NOT NULL,
+            holiday_date DATE NOT NULL,
+            name VARCHAR NOT NULL,
+            year INTEGER NOT NULL
+        )''',
+        'CREATE INDEX IF NOT EXISTS ix_public_holiday_region_year ON public_holiday (region_code, year)',
     ]
 
     for _sql in _migrations:
@@ -400,6 +416,7 @@ app.include_router(worker_export.router)
 app.include_router(access_logs.router)
 app.include_router(absence.router)
 app.include_router(documents.router)
+app.include_router(holidays.router)
 
 
 @app.get("/health")

@@ -15,6 +15,18 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Pencil, UserX, UserCheck, CalendarDays, KeyRound } from "lucide-react";
 
+const CCAA = [
+  { code: "ES-AN", name: "Andalucía" }, { code: "ES-AR", name: "Aragón" },
+  { code: "ES-AS", name: "Asturias" }, { code: "ES-IB", name: "Illes Balears" },
+  { code: "ES-CN", name: "Canarias" }, { code: "ES-CB", name: "Cantabria" },
+  { code: "ES-CL", name: "Castilla y León" }, { code: "ES-CM", name: "Castilla-La Mancha" },
+  { code: "ES-CT", name: "Cataluña" }, { code: "ES-EX", name: "Extremadura" },
+  { code: "ES-GA", name: "Galicia" }, { code: "ES-RI", name: "La Rioja" },
+  { code: "ES-MD", name: "Madrid" }, { code: "ES-MC", name: "Murcia" },
+  { code: "ES-NC", name: "Navarra" }, { code: "ES-PV", name: "País Vasco" },
+  { code: "ES-VC", name: "C. Valenciana" },
+]
+
 interface User {
   id: string;
   email: string;
@@ -25,6 +37,12 @@ interface User {
   scheduled_end?: string;
   dni?: string;
   vacation_days?: number;
+  position?: string;
+  department?: string;
+  contract_type?: string;
+  contract_start?: string;
+  contract_end?: string;
+  region_code?: string;
 }
 
 interface UserFormData {
@@ -35,6 +53,12 @@ interface UserFormData {
   scheduled_end: string;
   dni: string;
   vacation_days: string;
+  position: string;
+  department: string;
+  contract_type: string;
+  contract_start: string;
+  contract_end: string;
+  region_code: string;
 }
 
 const emptyForm: UserFormData = {
@@ -45,6 +69,12 @@ const emptyForm: UserFormData = {
   scheduled_end: "",
   dni: "",
   vacation_days: "22",
+  position: "",
+  department: "",
+  contract_type: "",
+  contract_start: "",
+  contract_end: "",
+  region_code: "",
 };
 
 interface Features { schedule_enabled: boolean; vacation_enabled: boolean; }
@@ -111,6 +141,12 @@ export default function UsersPage() {
       scheduled_end: u.scheduled_end || "",
       dni: u.dni || "",
       vacation_days: String(u.vacation_days ?? 22),
+      position: u.position || "",
+      department: u.department || "",
+      contract_type: u.contract_type || "",
+      contract_start: u.contract_start || "",
+      contract_end: u.contract_end || "",
+      region_code: u.region_code || "",
     });
     setError(null);
     setDialogOpen(true);
@@ -184,6 +220,14 @@ export default function UsersPage() {
     setError(null);
 
     try {
+      const hrFields = {
+        position: form.position || null,
+        department: form.department || null,
+        contract_type: form.contract_type || null,
+        contract_start: form.contract_start || null,
+        contract_end: form.contract_end || null,
+        region_code: form.region_code || null,
+      };
       if (editUser) {
         await api.put(`/users/${editUser.id}`, {
           full_name: form.full_name,
@@ -191,6 +235,7 @@ export default function UsersPage() {
           scheduled_end: form.scheduled_end || null,
           dni: form.dni || null,
           vacation_days: form.vacation_days ? parseInt(form.vacation_days) : 22,
+          ...hrFields,
         });
       } else {
         await api.post("/users", {
@@ -201,6 +246,7 @@ export default function UsersPage() {
           scheduled_end: form.scheduled_end || null,
           dni: form.dni || null,
           vacation_days: form.vacation_days ? parseInt(form.vacation_days) : 22,
+          ...hrFields,
         });
       }
       setDialogOpen(false);
@@ -369,7 +415,7 @@ export default function UsersPage() {
 
       {/* Edit / Create user dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editUser ? "Editar trabajador" : "Nuevo trabajador"}
@@ -448,6 +494,81 @@ export default function UsersPage() {
                   value={form.scheduled_end}
                   onChange={(e) => setForm({ ...form, scheduled_end: e.target.value })}
                 />
+              </div>
+            </div>
+
+            {/* Datos laborales */}
+            <div className="border-t pt-4 space-y-3">
+              <p className="text-sm font-semibold text-slate-700">Datos laborales</p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Puesto / cargo</Label>
+                  <Input
+                    value={form.position}
+                    onChange={(e) => setForm({ ...form, position: e.target.value })}
+                    placeholder="Ej: Técnico de soporte"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Departamento</Label>
+                  <Input
+                    value={form.department}
+                    onChange={(e) => setForm({ ...form, department: e.target.value })}
+                    placeholder="Ej: Operaciones"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Tipo de contrato</Label>
+                <select
+                  value={form.contract_type}
+                  onChange={(e) => setForm({ ...form, contract_type: e.target.value })}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                >
+                  <option value="">— Sin especificar —</option>
+                  <option value="indefinido">Indefinido</option>
+                  <option value="temporal">Temporal</option>
+                  <option value="practicas">Prácticas</option>
+                  <option value="formacion">Formación</option>
+                  <option value="autonomo">Autónomo</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Fecha inicio contrato</Label>
+                  <Input
+                    type="date"
+                    value={form.contract_start}
+                    onChange={(e) => setForm({ ...form, contract_start: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Fecha fin contrato</Label>
+                  <Input
+                    type="date"
+                    value={form.contract_end}
+                    min={form.contract_start}
+                    onChange={(e) => setForm({ ...form, contract_end: e.target.value })}
+                    placeholder="Vacío = indefinido"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Comunidad autónoma</Label>
+                <select
+                  value={form.region_code}
+                  onChange={(e) => setForm({ ...form, region_code: e.target.value })}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                >
+                  <option value="">— Sin especificar —</option>
+                  {CCAA.map((c) => (
+                    <option key={c.code} value={c.code}>{c.name}</option>
+                  ))}
+                </select>
               </div>
             </div>
 

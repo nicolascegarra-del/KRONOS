@@ -1,6 +1,6 @@
 from enum import Enum
 from uuid import UUID, uuid4
-from datetime import datetime, time
+from datetime import date, datetime, time
 from typing import TYPE_CHECKING, Optional, List
 
 from sqlmodel import SQLModel, Field, Relationship
@@ -40,6 +40,14 @@ class User(SQLModel, table=True):
     geo_consent_date: Optional[datetime] = Field(default=None)
     privacy_notice_accepted: Optional[bool] = Field(default=None)
     privacy_notice_date: Optional[datetime] = Field(default=None)
+
+    # HR profile
+    position: Optional[str] = Field(default=None)        # puesto / cargo
+    department: Optional[str] = Field(default=None)      # departamento
+    contract_type: Optional[str] = Field(default=None)   # indefinido|temporal|practicas|formacion|autonomo
+    contract_start: Optional[date] = Field(default=None) # fecha inicio contrato
+    contract_end: Optional[date] = Field(default=None)   # fecha fin (None = indefinido)
+    region_code: Optional[str] = Field(default=None)     # ES-MD, ES-CT, etc. para festivos
 
     fichajes: List["Fichaje"] = Relationship(back_populates="user")
     company: Optional["Company"] = Relationship(back_populates="users")

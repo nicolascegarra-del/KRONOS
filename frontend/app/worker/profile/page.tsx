@@ -8,6 +8,14 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Save, User } from "lucide-react"
 
+const CONTRACT_TYPE_LABELS: Record<string, string> = {
+  indefinido: "Indefinido",
+  temporal: "Temporal",
+  practicas: "Prácticas",
+  formacion: "Formación",
+  autonomo: "Autónomo",
+}
+
 interface WorkerProfile {
   id: string
   full_name: string
@@ -16,6 +24,11 @@ interface WorkerProfile {
   scheduled_start?: string
   scheduled_end?: string
   company_id?: string
+  position?: string
+  department?: string
+  contract_type?: string
+  contract_start?: string
+  contract_end?: string
 }
 
 export default function WorkerProfilePage() {
@@ -146,6 +159,41 @@ export default function WorkerProfilePage() {
           {saving ? "Guardando..." : "Guardar cambios"}
         </Button>
       </form>
+
+      {/* Datos laborales (read-only) */}
+      {(profile?.position || profile?.department || profile?.contract_type || profile?.contract_start) && (
+        <div className="bg-white border rounded-lg p-5 space-y-3">
+          <h2 className="text-sm font-semibold text-slate-700 border-b pb-2">Datos laborales</h2>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+            {profile.position && (
+              <div>
+                <span className="block text-xs font-medium text-slate-500">Puesto / cargo</span>
+                <span className="font-medium text-slate-700">{profile.position}</span>
+              </div>
+            )}
+            {profile.department && (
+              <div>
+                <span className="block text-xs font-medium text-slate-500">Departamento</span>
+                <span className="font-medium text-slate-700">{profile.department}</span>
+              </div>
+            )}
+            {profile.contract_type && (
+              <div>
+                <span className="block text-xs font-medium text-slate-500">Tipo de contrato</span>
+                <span className="font-medium text-slate-700">{CONTRACT_TYPE_LABELS[profile.contract_type] ?? profile.contract_type}</span>
+              </div>
+            )}
+            {profile.contract_start && (
+              <div>
+                <span className="block text-xs font-medium text-slate-500">Fecha de incorporación</span>
+                <span className="font-medium text-slate-700">
+                  {new Date(profile.contract_start + "T00:00:00").toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" })}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Notification preferences */}
       <div className="bg-white border rounded-lg p-5 space-y-3">

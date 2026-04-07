@@ -12,21 +12,31 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-type AbsenceType = "vacaciones" | "baja_medica" | "permiso" | "otros";
+type AbsenceType = "vacaciones" | "baja_medica" | "permiso" | "otros" | "asuntos_propios" | "maternidad_paternidad" | "lactancia" | "excedencia" | "permiso_no_retribuido";
 type AbsenceStatus = "pending" | "approved" | "rejected";
 
-const TYPE_LABELS: Record<AbsenceType, string> = {
-  vacaciones: "Vacaciones",
-  baja_medica: "Baja médica",
-  permiso: "Permiso",
-  otros: "Otros",
+const TYPE_LABELS: Record<string, string> = {
+  vacaciones:            "Vacaciones",
+  baja_medica:           "Baja médica",
+  permiso:               "Permiso retribuido",
+  otros:                 "Otros",
+  asuntos_propios:       "Asuntos propios",
+  maternidad_paternidad: "Maternidad / Paternidad",
+  lactancia:             "Lactancia",
+  excedencia:            "Excedencia",
+  permiso_no_retribuido: "Permiso no retribuido",
 };
 
-const TYPE_COLORS: Record<AbsenceType, string> = {
-  vacaciones: "bg-blue-50 text-blue-700 border-blue-200",
-  baja_medica: "bg-red-50 text-red-700 border-red-200",
-  permiso: "bg-purple-50 text-purple-700 border-purple-200",
-  otros: "bg-slate-50 text-slate-700 border-slate-200",
+const TYPE_COLORS: Record<string, string> = {
+  vacaciones:            "bg-blue-50 text-blue-700 border-blue-200",
+  baja_medica:           "bg-red-50 text-red-700 border-red-200",
+  permiso:               "bg-purple-50 text-purple-700 border-purple-200",
+  otros:                 "bg-slate-50 text-slate-700 border-slate-200",
+  asuntos_propios:       "bg-cyan-50 text-cyan-700 border-cyan-200",
+  maternidad_paternidad: "bg-pink-50 text-pink-700 border-pink-200",
+  lactancia:             "bg-rose-50 text-rose-700 border-rose-200",
+  excedencia:            "bg-gray-50 text-gray-600 border-gray-200",
+  permiso_no_retribuido: "bg-orange-50 text-orange-700 border-orange-200",
 };
 
 const STATUS_LABELS: Record<AbsenceStatus, string> = {
