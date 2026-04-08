@@ -2,7 +2,8 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response, Cookie, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, Cookie, status
+from app.limiter import limiter
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,7 +29,9 @@ REFRESH_COOKIE = "refresh_token"
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("10/minute")
 async def login(
+    request: Request,
     body: LoginRequest,
     response: Response,
     session: AsyncSession = Depends(get_session),
@@ -214,7 +217,9 @@ class ResetPasswordRequest(BaseModel):
 
 
 @router.post("/forgot-password", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
 async def forgot_password(
+    request: Request,
     body: ForgotPasswordRequest,
     session: AsyncSession = Depends(get_session),
 ):
@@ -251,7 +256,7 @@ async def _fire_password_reset_email(user: User, reset_link: str) -> None:
             config = await _get_email_config(session, user.company_id)
         await send_password_reset_email(config, user.email, user.full_name, reset_link)
     except Exception as exc:
-        print(f"[forgot-password-email] Error: {exc}")
+        import logging; logging.getLogger(__name__).error("[forgot-password-email] Error: %s", exc)
 
 
 @router.post("/reset-password", status_code=status.HTTP_200_OK)

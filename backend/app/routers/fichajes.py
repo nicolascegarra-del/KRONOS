@@ -227,11 +227,10 @@ async def _notify_out_of_range(worker: User, company_id: UUID) -> None:
             su inicio de jornada fuera de los centros de trabajo configurados.</p>
             <p>Revisa el panel de fichajes para más detalles.</p>
             """
-            for admin in admins:
-                try:
-                    await send_email(config, admin.email, subject, body)
-                except Exception:
-                    pass
+            await asyncio.gather(
+                *[send_email(config, admin.email, subject, body) for admin in admins],
+                return_exceptions=True,
+            )
     except Exception:
         pass
 

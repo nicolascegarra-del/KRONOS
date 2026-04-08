@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { api } from "@/lib/api";
+import { api, setAccessToken } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import {
   Clock,
@@ -180,7 +180,7 @@ export default function LoginPage() {
         password: regPassword,
       });
       const token: string = res.data.access_token;
-      if (typeof window !== "undefined") window.__accessToken = token;
+      setAccessToken(token);
       const payload = JSON.parse(atob(token.split(".")[1]));
       useAuthStore.getState().setUser({
         id: payload.sub,

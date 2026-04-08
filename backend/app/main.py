@@ -1,9 +1,16 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
+from app.limiter import limiter
+
+logger = logging.getLogger(__name__)
 
 from app.config import get_settings
 from app.routers import auth, users, fichajes, reports, pause_types, notifications, companies, worker_schedule, work_centers, superadmin_users, invoice_config, worker_export, access_logs, absence, documents, holidays
@@ -31,13 +38,13 @@ async def _auto_close_loop() -> None:
                     if cfg and cfg.auto_close_enabled and cfg.auto_close_hours > 0:
                         closed = await _close_open_fichajes(session, max_hours=cfg.auto_close_hours)
                         if closed:
-                            print(f"[auto-close] Closed {closed} fichaje(s) open > {cfg.auto_close_hours}h")
+                            logger.info("[auto-close] Closed %d fichaje(s) open > %sh", closed, cfg.auto_close_hours)
 
             await asyncio.wait_for(_do_auto_close(), timeout=60.0)
         except asyncio.TimeoutError:
-            print("[auto-close] Timeout after 60s — skipping cycle")
+            logger.warning("[auto-close] Timeout after 60s — skipping cycle")
         except Exception as exc:
-            print(f"[auto-close] Error: {exc}")
+            logger.error("[auto-close] Error: %s", exc)
         await asyncio.sleep(_AUTO_CLOSE_INTERVAL)
 
 
@@ -153,7 +160,7 @@ async def _run_column_migrations() -> None:
         except Exception as exc:
             # Log but never crash — a migration that already ran or is not needed
             # on this DB version should not stop the app from starting.
-            print(f"[migrate] SKIP ({exc.__class__.__name__}): {_sql[:80]}")
+            logger.debug("[migrate] SKIP (%s): %s", exc.__class__.__name__, _sql[:80])
 
     # worker_schedule unique constraint — must run outside a transaction on some PG versions
     try:
@@ -172,7 +179,7 @@ async def _run_column_migrations() -> None:
                 END $$;
             """))
     except Exception as exc:
-        print(f"[migrate] SKIP worker_schedule unique constraint: {exc}")
+        logger.debug("[migrate] SKIP worker_schedule unique constraint: %s", exc)
 
 
 async def _monthly_report_loop() -> None:
@@ -186,7 +193,7 @@ async def _monthly_report_loop() -> None:
                 await _send_monthly_reports(now)
                 last_sent_month = (now.year, now.month)
         except Exception as exc:
-            print(f"[monthly-report] Error: {exc}")
+            logger.error("[monthly-report] Error: %s", exc)
         await asyncio.sleep(3600)
 
 
@@ -257,9 +264,9 @@ async def _send_monthly_reports(now: "datetime") -> None:
         config = email_configs.get(worker.company_id)
         try:
             await send_monthly_report_email(config, worker.email, worker.full_name, month_label, rows)
-            print(f"[monthly-report] Sent to {worker.email}")
+            logger.info("[monthly-report] Sent to %s", worker.email)
         except Exception as exc:
-            print(f"[monthly-report] Failed for {worker.email}: {exc}")
+            logger.error("[monthly-report] Failed for %s: %s", worker.email, exc)
 
     tasks = [_send_one(w) for w in workers]
     await asyncio.gather(*tasks, return_exceptions=True)
@@ -300,17 +307,17 @@ async def _cleanup_loop() -> None:
                 await session.commit()
 
             if deleted_tokens or deleted_logs:
-                print(f"[cleanup] Removed {deleted_tokens} expired tokens, {deleted_logs} old access logs")
+                logger.info("[cleanup] Removed %d expired tokens, %d old access logs", deleted_tokens, deleted_logs)
 
             # Log memory usage so production trends are visible in Coolify logs
             try:
                 import resource
                 mem_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
-                print(f"[cleanup] Memory RSS: {mem_mb:.0f} MB")
+                logger.info("[cleanup] Memory RSS: %.0f MB", mem_mb)
             except Exception:
                 pass
         except Exception as exc:
-            print(f"[cleanup] Error: {exc}")
+            logger.error("[cleanup] Error: %s", exc)
         await asyncio.sleep(3600)  # run once per hour (evita conexiones BD inactivas 24h)
 
 
@@ -346,23 +353,23 @@ async def _do_startup() -> None:
             row = result.fetchone()
             if row and row[0] in ("integer", "bigint", "smallint"):
                 await conn.execute(text("DROP TABLE email_config"))
-                print("[migration] Dropped old email_config (integer PK → UUID PK)")
+                logger.info("[migration] Dropped old email_config (integer PK → UUID PK)")
     except Exception as _e:
-        print(f"[migration] email_config pre-check skipped: {_e}")
+        logger.debug("[migration] email_config pre-check skipped: %s", _e)
 
     try:
         await init_db()
     except Exception as exc:
-        print(f"[startup] init_db failed: {exc}")
+        logger.error("[startup] init_db failed: %s", exc)
 
     await _run_column_migrations()
 
     try:
         await seed()
     except Exception as exc:
-        print(f"[startup] seed failed: {exc}")
+        logger.error("[startup] seed failed: %s", exc)
 
-    print("[startup] DB initialization complete.")
+    logger.info("[startup] DB initialization complete.")
 
 
 @asynccontextmanager
@@ -399,12 +406,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=app_settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Cookie"],
 )
 
 app.include_router(auth.router)

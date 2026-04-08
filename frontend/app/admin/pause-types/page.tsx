@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Trash2, Plus } from "lucide-react";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 interface PausaTipo {
   id: string;
@@ -19,12 +20,11 @@ export default function PauseTypesPage() {
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const fetchTipos = async () => {
     setLoading(true);
     try {
-      // Admin sees all including inactive — we request from the same endpoint
-      // (active-only list is fine for this management view)
       const res = await api.get<PausaTipo[]>("/pause-types");
       setTipos(res.data);
     } finally {
@@ -50,13 +50,15 @@ export default function PauseTypesPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar este tipo de pausa?")) return;
+  const handleDelete = async () => {
+    if (!confirmId) return;
     try {
-      await api.delete(`/pause-types/${id}`);
+      await api.delete(`/pause-types/${confirmId}`);
       await fetchTipos();
     } catch (e: any) {
       setError(e.response?.data?.detail || "Error al eliminar");
+    } finally {
+      setConfirmId(null);
     }
   };
 
@@ -100,7 +102,8 @@ export default function PauseTypesPage() {
                   size="sm"
                   variant="ghost"
                   className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => handleDelete(t.id)}
+                  onClick={() => setConfirmId(t.id)}
+                  aria-label={`Eliminar ${t.name}`}
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -109,6 +112,15 @@ export default function PauseTypesPage() {
           </ul>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmId}
+        title="Eliminar tipo de pausa"
+        description="¿Seguro que quieres eliminar este tipo de pausa? Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmId(null)}
+      />
     </div>
   );
 }

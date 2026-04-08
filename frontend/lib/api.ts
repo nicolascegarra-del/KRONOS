@@ -2,6 +2,12 @@ import axios from "axios";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+// Access token stored in module closure — not accessible via window (XSS-safe)
+let _accessToken: string | undefined;
+
+export const setAccessToken = (token: string | undefined) => { _accessToken = token; };
+export const getAccessToken = () => _accessToken;
+
 export const api = axios.create({
   baseURL: API_URL,
   withCredentials: true, // for refresh cookie
@@ -9,11 +15,8 @@ export const api = axios.create({
 
 // Attach access token from memory
 api.interceptors.request.use((config) => {
-  if (typeof window !== "undefined") {
-    const token = window.__accessToken;
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+  if (_accessToken) {
+    config.headers.Authorization = `Bearer ${_accessToken}`;
   }
   return config;
 });
@@ -52,9 +55,7 @@ api.interceptors.response.use(
           { withCredentials: true }
         );
         const newToken = resp.data.access_token;
-        if (typeof window !== "undefined") {
-          window.__accessToken = newToken;
-        }
+        _accessToken = newToken;
         refreshQueue.forEach((cb) => cb(newToken));
         refreshQueue = [];
         original.headers.Authorization = `Bearer ${newToken}`;
@@ -62,8 +63,8 @@ api.interceptors.response.use(
       } catch {
         refreshQueue.forEach((cb) => cb(""));
         refreshQueue = [];
+        _accessToken = undefined;
         if (typeof window !== "undefined") {
-          window.__accessToken = undefined;
           window.location.href = "/login";
         }
         return Promise.reject(error);
@@ -76,9 +77,3 @@ api.interceptors.response.use(
   }
 );
 
-// Type augmentation for in-memory token storage
-declare global {
-  interface Window {
-    __accessToken?: string;
-  }
-}

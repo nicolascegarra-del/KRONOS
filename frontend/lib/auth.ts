@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, setAccessToken } from "./api";
 
 export interface AuthUser {
   id: string;
@@ -18,9 +18,7 @@ export async function loginUser(email: string, password: string): Promise<AuthUs
   });
 
   const token = resp.data.access_token;
-  if (typeof window !== "undefined") {
-    window.__accessToken = token;
-  }
+  setAccessToken(token);
 
   // Decode JWT payload (no crypto needed, just decode base64)
   const payload = JSON.parse(atob(token.split(".")[1]));
@@ -39,8 +37,6 @@ export async function logoutUser(): Promise<void> {
   try {
     await api.post("/auth/logout");
   } finally {
-    if (typeof window !== "undefined") {
-      window.__accessToken = undefined;
-    }
+    setAccessToken(undefined);
   }
 }

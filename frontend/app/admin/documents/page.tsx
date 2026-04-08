@@ -19,6 +19,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { downloadBlob } from "@/lib/downloadBlob";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 interface StorageUsage {
   used_bytes: number;
@@ -96,6 +97,8 @@ export default function AdminDocumentsPage() {
 
   const [isDragOver, setIsDragOver] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   const fetchDocs = useCallback(async () => {
     setLoading(true);
@@ -160,16 +163,16 @@ export default function AdminDocumentsPage() {
     }
   };
 
-  const handleDeleteOne = async (id: string) => {
-    if (!confirm("¿Eliminar este documento?")) return;
-    await api.delete(`/documents/${id}`);
-    setSelectedIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
+  const handleDeleteOne = async () => {
+    if (!confirmDeleteId) return;
+    await api.delete(`/documents/${confirmDeleteId}`);
+    setSelectedIds((prev) => { const s = new Set(prev); s.delete(confirmDeleteId); return s; });
+    setConfirmDeleteId(null);
     fetchDocs();
   };
 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`¿Eliminar ${selectedIds.size} documento(s) seleccionado(s)?`)) return;
     setDeleting(true);
     try {
       await api.post("/documents/bulk-delete", { ids: Array.from(selectedIds) });
@@ -177,6 +180,7 @@ export default function AdminDocumentsPage() {
       fetchDocs();
     } finally {
       setDeleting(false);
+      setConfirmBulkDelete(false);
     }
   };
 
@@ -334,7 +338,7 @@ export default function AdminDocumentsPage() {
           <Button
             size="sm"
             variant="destructive"
-            onClick={handleBulkDelete}
+            onClick={() => setConfirmBulkDelete(true)}
             disabled={deleting}
             className="gap-1.5"
           >
@@ -427,7 +431,7 @@ export default function AdminDocumentsPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleDeleteOne(doc.id)}
+                            onClick={() => setConfirmDeleteId(doc.id)}
                             className="h-7 px-2 text-red-500 hover:text-red-700 hover:bg-red-50"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -460,6 +464,24 @@ export default function AdminDocumentsPage() {
         open={reportOpen}
         onClose={() => setReportOpen(false)}
         report={uploadReport}
+      />
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        title="Eliminar documento"
+        description="¿Seguro que quieres eliminar este documento? Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        onConfirm={handleDeleteOne}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmBulkDelete}
+        title={`Eliminar ${selectedIds.size} documento(s)`}
+        description={`¿Seguro que quieres eliminar ${selectedIds.size} documento(s) seleccionado(s)? Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar todos"
+        onConfirm={handleBulkDelete}
+        onCancel={() => setConfirmBulkDelete(false)}
       />
     </div>
   );

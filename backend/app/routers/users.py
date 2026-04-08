@@ -1,7 +1,7 @@
 import asyncio
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
 from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,11 +41,13 @@ async def _fire_welcome_email(company_id, to_email: str, full_name: str, passwor
             config = await _get_email_config(session, company_id)
         await send_welcome_email(config, to_email, full_name, password, cfg.APP_URL)
     except Exception as exc:
-        print(f"[welcome-email] Error: {exc}")
+        import logging; logging.getLogger(__name__).error("[welcome-email] Error: %s", exc)
 
 
 @router.get("", response_model=list[UserRead])
 async def list_users(
+    limit: int = Query(default=500, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(require_admin),
 ):
@@ -53,6 +55,8 @@ async def list_users(
         select(User)
         .where(User.company_id == admin.company_id)
         .order_by(User.created_at)
+        .limit(limit)
+        .offset(offset)
     )
     return result.scalars().all()
 
@@ -155,7 +159,7 @@ async def _fire_admin_password_reset_email(
             config = await _get_email_config(session, company_id)
         await send_admin_password_reset_email(config, to_email, full_name, new_password, cfg.APP_URL)
     except Exception as exc:
-        print(f"[admin-reset-email] Error: {exc}")
+        import logging; logging.getLogger(__name__).error("[admin-reset-email] Error: %s", exc)
 
 
 @router.put("/{user_id}", response_model=UserRead)

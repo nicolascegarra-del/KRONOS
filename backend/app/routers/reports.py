@@ -95,6 +95,7 @@ async def fichajes_raw_export(
     from_dt = datetime.combine(from_date, datetime.min.time())
     to_dt = datetime.combine(to_date, datetime.max.time())
 
+    _MAX_EXPORT_ROWS = 10_000
     result = await session.execute(
         select(Fichaje)
         .join(User, Fichaje.user_id == User.id)
@@ -106,6 +107,7 @@ async def fichajes_raw_export(
             User.company_id == admin.company_id,
         )
         .order_by(User.full_name, Fichaje.start_time)
+        .limit(_MAX_EXPORT_ROWS)
     )
     fichajes = result.scalars().all()
 
