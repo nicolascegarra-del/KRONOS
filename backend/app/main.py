@@ -158,7 +158,8 @@ async def _run_column_migrations() -> None:
     # worker_schedule unique constraint — must run outside a transaction on some PG versions
     try:
         async with engine.connect() as conn:
-            await conn.execution_options(isolation_level="AUTOCOMMIT").execute(text("""
+            conn_ac = await conn.execution_options(isolation_level="AUTOCOMMIT")
+            await conn_ac.execute(text("""
                 DO $$
                 BEGIN
                     IF NOT EXISTS (
@@ -304,7 +305,7 @@ async def _cleanup_loop() -> None:
                 pass
         except Exception as exc:
             print(f"[cleanup] Error: {exc}")
-        await asyncio.sleep(86400)  # run once per day
+        await asyncio.sleep(3600)  # run once per hour (evita conexiones BD inactivas 24h)
 
 
 _DEFAULT_SECRET = "change-me-in-production-very-secret-key"

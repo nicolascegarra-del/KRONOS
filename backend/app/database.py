@@ -10,8 +10,8 @@ engine = create_async_engine(
     echo=settings.APP_ENV == "development",
     future=True,
     pool_pre_ping=True,      # test connection before use (prevents stale conn errors)
-    pool_size=5,             # max persistent connections (single worker — keep well under pg max_connections)
-    max_overflow=10,         # extra burst connections allowed
+    pool_size=10,            # max persistent connections
+    max_overflow=20,         # extra burst connections allowed
     pool_recycle=1800,       # recycle connections after 30 min (avoids idle timeouts)
     pool_timeout=30,         # raise after 30s waiting for a connection (explicit, avoids silent hangs)
 )

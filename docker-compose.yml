@@ -2,7 +2,7 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
-    command: postgres -c max_connections=50 -c shared_buffers=128MB -c effective_cache_size=256MB
+    command: postgres -c max_connections=100 -c shared_buffers=256MB -c effective_cache_size=512MB
     volumes:
       - pgdata:/var/lib/postgresql/data
     environment:
@@ -43,8 +43,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
-    mem_limit: 896m
-    mem_reservation: 192m
+    mem_limit: 1024m
+    mem_reservation: 512m
     networks:
       - default
       - coolify

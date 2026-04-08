@@ -674,6 +674,8 @@ async def superadmin_list_fichajes(
     fichaje_status: Optional[FichajeStatus] = Query(default=None, alias="status"),
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
+    limit: int = Query(default=200, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
     _superadmin: User = Depends(require_superadmin),
     session: AsyncSession = Depends(get_session),
 ):
@@ -683,6 +685,8 @@ async def superadmin_list_fichajes(
         .options(selectinload(Fichaje.user), selectinload(Fichaje.pausas))
         .where(Fichaje.is_deleted == False)
         .order_by(Fichaje.start_time.desc())
+        .limit(limit)
+        .offset(offset)
     )
     if company_id:
         query = query.where(User.company_id == company_id)

@@ -146,6 +146,8 @@ async def cancel_my_absence(
 async def list_absences(
     filter_status: Optional[AbsenceStatus] = None,
     user_id: Optional[UUID] = None,
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(require_admin),
 ):
@@ -158,7 +160,7 @@ async def list_absences(
         q = q.where(Absence.status == filter_status)
     if user_id:
         q = q.where(Absence.user_id == user_id)
-    q = q.order_by(Absence.created_at.desc())
+    q = q.order_by(Absence.created_at.desc()).limit(limit).offset(offset)
     result = await session.execute(q)
     return [_to_out(a, name, vdays) for a, name, vdays in result.all()]
 
