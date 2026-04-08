@@ -11,6 +11,7 @@ Endpoints:
   POST /documents/bulk-delete          — admin: delete multiple
 """
 
+import asyncio
 from pathlib import Path
 from typing import List, Optional
 from uuid import UUID
@@ -330,7 +331,7 @@ async def bulk_upload(
         dni = ds.extract_dni(original_name)
         if not dni:
             source = "content"
-            dni = ds.extract_dni_from_pdf_bytes(content)
+            dni = await asyncio.to_thread(ds.extract_dni_from_pdf_bytes, content)
 
         # Write file to disk
         stored_name = ds.make_stored_name(original_name)

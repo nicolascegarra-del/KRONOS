@@ -17,19 +17,26 @@ async def send_email(config: EmailConfig, to: str, subject: str, body_html: str)
         msg["Subject"] = subject
         msg.attach(MIMEText(body_html, "html"))
 
-        if config.use_tls:
-            server = smtplib.SMTP(config.smtp_host, config.smtp_port, timeout=10)
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-        else:
-            server = smtplib.SMTP_SSL(config.smtp_host, config.smtp_port, timeout=10)
+        server = None
+        try:
+            if config.use_tls:
+                server = smtplib.SMTP(config.smtp_host, config.smtp_port, timeout=10)
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+            else:
+                server = smtplib.SMTP_SSL(config.smtp_host, config.smtp_port, timeout=10)
 
-        if config.smtp_user and config.smtp_password:
-            server.login(config.smtp_user, config.smtp_password)
+            if config.smtp_user and config.smtp_password:
+                server.login(config.smtp_user, config.smtp_password)
 
-        server.sendmail(config.from_email, to, msg.as_string())
-        server.quit()
+            server.sendmail(config.from_email, to, msg.as_string())
+        finally:
+            if server:
+                try:
+                    server.quit()
+                except Exception:
+                    pass
 
     await asyncio.to_thread(_send)
 

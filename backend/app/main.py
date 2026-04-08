@@ -237,26 +237,32 @@ async def _send_monthly_reports(now: "datetime") -> None:
         for f in fichajes_result.scalars().all():
             fichajes_by_worker.setdefault(f.user_id, []).append(f)
 
-        async def _send_one(worker):
-            fichajes = fichajes_by_worker.get(worker.id, [])
-            rows = []
-            for f in fichajes:
-                rows.append({
-                    "date": f.start_time.strftime("%d/%m/%Y") if f.start_time else "",
-                    "start": f.start_time.strftime("%H:%M") if f.start_time else "",
-                    "end": f.end_time.strftime("%H:%M") if f.end_time else "—",
-                    "total": f"{f.total_minutes // 60}h {f.total_minutes % 60}min" if f.total_minutes else "—",
-                })
+        # Pre-load email configs per company (avoids sharing session across concurrent coroutines)
+        company_ids = list({w.company_id for w in workers if w.company_id})
+        email_configs: dict = {}
+        for cid in company_ids:
+            email_configs[cid] = await _get_email_config(session, cid)
 
-            config = await _get_email_config(session, worker.company_id)
-            try:
-                await send_monthly_report_email(config, worker.email, worker.full_name, month_label, rows)
-                print(f"[monthly-report] Sent to {worker.email}")
-            except Exception as exc:
-                print(f"[monthly-report] Failed for {worker.email}: {exc}")
+    # Session is closed here — _send_one only does SMTP I/O, no DB access
+    async def _send_one(worker):
+        fichajes = fichajes_by_worker.get(worker.id, [])
+        rows = []
+        for f in fichajes:
+            rows.append({
+                "date": f.start_time.strftime("%d/%m/%Y") if f.start_time else "",
+                "start": f.start_time.strftime("%H:%M") if f.start_time else "",
+                "end": f.end_time.strftime("%H:%M") if f.end_time else "—",
+                "total": f"{f.total_minutes // 60}h {f.total_minutes % 60}min" if f.total_minutes else "—",
+            })
+        config = email_configs.get(worker.company_id)
+        try:
+            await send_monthly_report_email(config, worker.email, worker.full_name, month_label, rows)
+            print(f"[monthly-report] Sent to {worker.email}")
+        except Exception as exc:
+            print(f"[monthly-report] Failed for {worker.email}: {exc}")
 
-        tasks = [_send_one(w) for w in workers]
-        await asyncio.gather(*tasks, return_exceptions=True)
+    tasks = [_send_one(w) for w in workers]
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
 async def _cleanup_loop() -> None:

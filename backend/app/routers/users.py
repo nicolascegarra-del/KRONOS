@@ -225,8 +225,10 @@ async def import_users(
     admin: User = Depends(require_admin),
 ):
     content = await file.read()
+    if len(content) > 10 * 1024 * 1024:  # 10 MB max
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="El archivo no puede superar 10 MB")
     try:
-        workers = parse_workers_csv(content)
+        workers = await asyncio.to_thread(parse_workers_csv, content)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
