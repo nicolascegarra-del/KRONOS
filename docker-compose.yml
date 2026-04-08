@@ -58,6 +58,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    labels:
+      - "traefik.docker.network=coolify"
     expose:
       - "3000"
     healthcheck:
