@@ -17,6 +17,7 @@ import {
   MoreHorizontal,
   CalendarRange,
   FileText,
+  UserCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import NotificationBell from "@/components/NotificationBell";
@@ -35,6 +36,7 @@ const BASE_NAV = [
   { href: "/admin/work-centers", label: "Centros trabajo", icon: MapPin, feature: null },
   { href: "/admin/pause-types", label: "Tipos pausa", icon: Tag, feature: null },
   { href: "/admin/settings", label: "Configuración", icon: Settings, feature: null },
+  { href: "/admin/profile", label: "Mi perfil", icon: UserCircle, feature: null },
 ] as const;
 
 export default function AdminLayout({
