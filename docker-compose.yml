@@ -25,6 +25,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    labels:
+      - "traefik.docker.network=coolify"
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-fichajes}
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
