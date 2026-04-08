@@ -10,7 +10,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog"
 import UserProfileCard, { UserProfile } from "@/components/UserProfileCard"
 
@@ -203,12 +202,12 @@ export default function SuperadminProfilePage() {
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
 
-          <DialogFooter>
+          <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={saving}>
               {saving ? "Guardando..." : "Guardar cambios"}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
