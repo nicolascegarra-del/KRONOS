@@ -12,13 +12,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import UserProfileCard, { UserProfile } from "@/components/UserProfileCard"
 
 const CONTRACT_TYPES = [
@@ -172,16 +165,16 @@ export default function SuperadminProfilePage() {
             </div>
             <div className="space-y-1.5">
               <Label>Tipo de contrato</Label>
-              <Select value={form.contract_type} onValueChange={(v) => setField("contract_type", v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {CONTRACT_TYPES.map((ct) => (
-                    <SelectItem key={ct.value} value={ct.value}>{ct.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select
+                value={form.contract_type}
+                onChange={(e) => setField("contract_type", e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">Seleccionar...</option>
+                {CONTRACT_TYPES.map((ct) => (
+                  <option key={ct.value} value={ct.value}>{ct.label}</option>
+                ))}
+              </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -195,16 +188,16 @@ export default function SuperadminProfilePage() {
             </div>
             <div className="space-y-1.5">
               <Label>Comunidad autónoma</Label>
-              <Select value={form.region_code} onValueChange={(v) => setField("region_code", v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {CCAA_OPTIONS.map((cc) => (
-                    <SelectItem key={cc.value} value={cc.value}>{cc.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select
+                value={form.region_code}
+                onChange={(e) => setField("region_code", e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">Seleccionar...</option>
+                {CCAA_OPTIONS.map((cc) => (
+                  <option key={cc.value} value={cc.value}>{cc.label}</option>
+                ))}
+              </select>
             </div>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
