@@ -232,13 +232,16 @@ async def import_users(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
-    # Get company for limit check
+    # Get company + current worker count once (evita N+1 dentro del loop)
     company = None
+    current_count = 0
     if admin.company_id is not None:
         company_result = await session.execute(
             select(Company).where(Company.id == admin.company_id)
         )
         company = company_result.scalar_one_or_none()
+        if company:
+            current_count = await _active_worker_count(session, admin.company_id)
 
     created = []
     skipped = []
@@ -248,12 +251,9 @@ async def import_users(
             skipped.append(w["email"])
             continue
 
-        # Check worker limit before adding each worker
-        if company:
-            current_count = await _active_worker_count(session, admin.company_id)
-            if current_count >= company.max_workers:
-                skipped.append(w["email"])
-                continue
+        if company and current_count >= company.max_workers:
+            skipped.append(w["email"])
+            continue
 
         user = User(
             email=w["email"],
@@ -264,6 +264,7 @@ async def import_users(
         )
         session.add(user)
         created.append(w["email"])
+        current_count += 1  # seguimiento local sin nueva query
 
     await session.commit()
     return {"created": created, "skipped": skipped}
