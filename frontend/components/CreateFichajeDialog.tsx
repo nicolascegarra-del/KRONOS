@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import UserSelect from "@/components/UserSelect";
+import { localInputToUtcIso } from "@/lib/utils";
 
 interface Company {
   id: string;
@@ -97,11 +98,11 @@ export default function CreateFichajeDialog({ open, mode, onClose, onCreated }: 
     try {
       const body: Record<string, string | number | null> = {
         user_id: form.user_id,
-        start_time: form.start_time + ":00",
+        start_time: localInputToUtcIso(form.start_time),
         modalidad: form.modalidad,
         edit_comment: form.edit_comment.trim(),
       };
-      if (form.end_time) body.end_time = form.end_time + ":00";
+      if (form.end_time) body.end_time = localInputToUtcIso(form.end_time);
       if (form.late_minutes !== "") body.late_minutes = Number(form.late_minutes);
       if (mode === "superadmin" && companyId) body.company_id = companyId;
 

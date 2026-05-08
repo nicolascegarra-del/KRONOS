@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { localInputToUtcIso, utcIsoToLocalInput } from "@/lib/utils";
 
 interface UserBasic {
   id: string;
@@ -47,11 +48,6 @@ interface EditForm {
   edit_comment: string;
 }
 
-function toInputDatetime(iso?: string): string {
-  if (!iso) return "";
-  return iso.slice(0, 16);
-}
-
 export default function FichajeEditDialog({ target, onClose, onSaved }: Props) {
   const [form, setForm] = useState<EditForm>({
     start_time: "",
@@ -69,8 +65,8 @@ export default function FichajeEditDialog({ target, onClose, onSaved }: Props) {
     if (target) {
       setError(null);
       setForm({
-        start_time: toInputDatetime(target.start_time),
-        end_time: toInputDatetime(target.end_time),
+        start_time: utcIsoToLocalInput(target.start_time),
+        end_time: utcIsoToLocalInput(target.end_time),
         status: target.status,
         modalidad: target.modalidad ?? "presencial",
         total_minutes: target.total_minutes != null ? String(target.total_minutes) : "",
@@ -96,8 +92,8 @@ export default function FichajeEditDialog({ target, onClose, onSaved }: Props) {
       const body: Record<string, string | number> = {
         edit_comment: form.edit_comment.trim(),
       };
-      if (form.start_time) body.start_time = form.start_time + ":00";
-      if (form.end_time) body.end_time = form.end_time + ":00";
+      if (form.start_time) body.start_time = localInputToUtcIso(form.start_time);
+      if (form.end_time) body.end_time = localInputToUtcIso(form.end_time);
       if (form.status) body.status = form.status;
       if (form.modalidad) body.modalidad = form.modalidad;
       if (form.total_minutes !== "") body.total_minutes = Number(form.total_minutes);

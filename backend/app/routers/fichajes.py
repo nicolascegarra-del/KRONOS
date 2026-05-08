@@ -85,6 +85,25 @@ async def _reload(session: AsyncSession, fichaje_id: UUID) -> Fichaje:
     return result.scalar_one()
 
 
+async def _reload_admin(session: AsyncSession, fichaje_id: UUID) -> Fichaje:
+    """Reload a fichaje with pausas AND user — needed when the response_model
+    is FichajeAdminRead (which serializes the `user` relation). Without
+    eager-loading `user`, Pydantic triggers lazy load in async session and
+    raises MissingGreenlet, returning 500 even though the row was committed."""
+    try:
+        cached = await session.get(Fichaje, fichaje_id)
+        if cached is not None:
+            session.expunge(cached)
+    except Exception:
+        pass
+    result = await session.execute(
+        select(Fichaje)
+        .options(selectinload(Fichaje.user), selectinload(Fichaje.pausas))
+        .where(Fichaje.id == fichaje_id)
+    )
+    return result.scalar_one()
+
+
 async def _check_fichaje_limit(user: User, session: AsyncSession) -> None:
     """Raise 403 if the user's company has reached its fichaje quota."""
     if not user.company_id:
@@ -653,7 +672,7 @@ async def admin_create_fichaje(
 
     session.add(fichaje)
     await session.commit()
-    return await _reload(session, fichaje.id)
+    return await _reload_admin(session, fichaje.id)
 
 
 @router.patch("/admin/{fichaje_id}", response_model=FichajeAdminRead)
@@ -752,7 +771,7 @@ async def admin_edit_fichaje(
 
     session.add(fichaje)
     await session.commit()
-    return await _reload(session, fichaje.id)
+    return await _reload_admin(session, fichaje.id)
 
 
 _DIFF_FIELDS = ["start_time", "end_time", "status", "modalidad", "total_minutes", "late_minutes", "out_of_range"]

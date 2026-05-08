@@ -7,8 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Search, Trash2, MessageSquare, Pencil, Plus } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
-import { format } from "date-fns";
-import { minutesToHoursLabel } from "@/lib/utils";
+import { formatDateTime, minutesToHoursLabel } from "@/lib/utils";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import FichajeEditDialog, { FichajeEditTarget } from "@/components/FichajeEditDialog";
 import CreateFichajeDialog from "@/components/CreateFichajeDialog";
@@ -41,7 +40,7 @@ interface FichajeSuperadmin {
 
 function fmtDatetime(iso?: string): string {
   if (!iso) return "—";
-  return format(new Date(iso), "dd/MM/yyyy HH:mm");
+  return formatDateTime(iso);
 }
 
 export default function SuperadminFichajesPage() {

@@ -37,3 +37,34 @@ export function getShiftDuration(startTime: string, endTime?: string): string {
     locale: es,
   });
 }
+
+/**
+ * Convierte el valor de un input <input type="datetime-local"> (hora local naive,
+ * formato "YYYY-MM-DDTHH:mm") a un ISO 8601 en UTC con sufijo "Z" para enviar al
+ * backend. Así la BD guarda siempre UTC y la app evita las inconsistencias entre
+ * roles (CEST vs UTC) que surgen al persistir hora local cruda.
+ */
+export function localInputToUtcIso(localInput: string): string {
+  if (!localInput) return "";
+  // new Date("YYYY-MM-DDTHH:mm") interpreta el string como hora local del navegador
+  const d = new Date(localInput);
+  return d.toISOString();
+}
+
+/**
+ * Convierte un ISO 8601 (con o sin "Z", asumido UTC si no tiene tz) al formato
+ * "YYYY-MM-DDTHH:mm" en hora local del navegador, listo para un input
+ * <input type="datetime-local">.
+ */
+export function utcIsoToLocalInput(iso?: string | null): string {
+  if (!iso) return "";
+  const normalized = iso.endsWith("Z") || /[+-]\d{2}:?\d{2}$/.test(iso) ? iso : iso + "Z";
+  const d = new Date(normalized);
+  if (isNaN(d.getTime())) return "";
+  // Construye YYYY-MM-DDTHH:mm en hora local sin desfase
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  );
+}
