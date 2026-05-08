@@ -2,7 +2,7 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
-    command: postgres -c max_connections=100 -c shared_buffers=256MB -c effective_cache_size=512MB
+    command: postgres -c listen_addresses=* -c max_connections=100 -c shared_buffers=256MB -c effective_cache_size=512MB
     volumes:
       - pgdata:/var/lib/postgresql/data
     environment:
