@@ -55,14 +55,17 @@ async def create_user(
 @router.get("", response_model=list[UserRead])
 async def list_all_users(
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=50, ge=1, le=100),
+    page_size: int = Query(default=50, ge=1, le=500),
+    company_id: Optional[UUID] = Query(default=None),
     _sa: User = Depends(require_superadmin),
     session: AsyncSession = Depends(get_session),
 ):
     offset = (page - 1) * page_size
-    result = await session.execute(
-        select(User).order_by(User.created_at).offset(offset).limit(page_size)
-    )
+    query = select(User).order_by(User.created_at)
+    if company_id is not None:
+        query = query.where(User.company_id == company_id)
+    query = query.offset(offset).limit(page_size)
+    result = await session.execute(query)
     users = result.scalars().all()
 
     # Build company name lookup

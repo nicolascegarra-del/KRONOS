@@ -13,3 +13,4 @@ class FichajeEditLog(SQLModel, table=True):
     edited_by_id: UUID = Field(foreign_key="user.id")
     comment: str
     original_data: str  # JSON snapshot of the fichaje before the edit
+    action: str = Field(default="update")  # 'create' | 'update' | 'force_end'

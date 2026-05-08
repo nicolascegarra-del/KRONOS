@@ -1,5 +1,5 @@
 import asyncio
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -11,15 +11,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy import func as sql_func
 from app.database import get_session
-from app.dependencies import get_current_user, require_admin, require_superadmin
+from app.dependencies import (
+    get_current_user,
+    require_admin,
+    require_admin_or_superadmin,
+    require_superadmin,
+)
 from app.models.company import Company
 from app.models.fichaje import Fichaje, FichajeStatus
 from app.models.pausa import Pausa
 from app.models.user import User, UserRole
 from app.models.work_center import WorkCenter
 from app.schemas.fichaje import (
-    FichajeAdminRead, FichajeAdminListResponse, FichajeAdminUpdate, FichajeRead,
-    FichajeEditLogRead, FieldChange,
+    FichajeAdminCreate, FichajeAdminListResponse, FichajeAdminRead, FichajeAdminUpdate,
+    FichajeEditLogRead, FichajeRead, FieldChange,
     PauseRequest, StartRequest, EndRequest, ResumeRequest,
 )
 from app.models.fichajeeditlog import FichajeEditLog
@@ -33,6 +38,22 @@ router = APIRouter(prefix="/fichajes", tags=["fichajes"])
 def _now() -> datetime:
     """Return current UTC time as naive datetime (no tzinfo) for PostgreSQL TIMESTAMP."""
     return datetime.utcnow()
+
+
+def _to_naive_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    """Normalize a datetime to naive UTC.
+
+    The DB column is `TIMESTAMP WITHOUT TIME ZONE` and the rest of the code
+    uses `datetime.utcnow()` (naive). Frontend may send ISO strings with `Z`
+    or `+00:00` which Pydantic parses as aware datetimes — those would fail
+    when subtracted from naive datetimes (TypeError) or be persisted with
+    tzinfo causing inconsistencies.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 async def _get_active_fichaje(user_id: UUID, session: AsyncSession) -> Fichaje | None:
@@ -414,14 +435,18 @@ async def admin_list_fichajes(
 @router.post("/admin/{fichaje_id}/end", response_model=FichajeRead)
 async def admin_end_fichaje(
     fichaje_id: UUID,
-    admin: User = Depends(require_admin),
+    caller: User = Depends(require_admin_or_superadmin),
     session: AsyncSession = Depends(get_session),
 ):
+    where_clauses = [Fichaje.id == fichaje_id]
+    if caller.role == UserRole.admin:
+        where_clauses.append(User.company_id == caller.company_id)
+
     result = await session.execute(
         select(Fichaje)
         .join(User, Fichaje.user_id == User.id)
         .options(selectinload(Fichaje.pausas))
-        .where(Fichaje.id == fichaje_id, User.company_id == admin.company_id)
+        .where(*where_clauses)
     )
     fichaje = result.scalar_one_or_none()
     if not fichaje:
@@ -430,7 +455,6 @@ async def admin_end_fichaje(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Shift is already finished")
 
     import json
-    from app.models.fichajeeditlog import FichajeEditLog
 
     now = _now()
 
@@ -447,9 +471,10 @@ async def admin_end_fichaje(
     }
     force_end_log = FichajeEditLog(
         fichaje_id=fichaje.id,
-        edited_by_id=admin.id,
+        edited_by_id=caller.id,
         comment="Jornada finalizada manualmente por el administrador",
         original_data=json.dumps(original_snapshot),
+        action="force_end",
     )
     session.add(force_end_log)
 
@@ -461,7 +486,7 @@ async def admin_end_fichaje(
     fichaje.end_time = now
     fichaje.status = FichajeStatus.finished
     fichaje.total_minutes = calculate_total_minutes(fichaje, fichaje.pausas)
-    fichaje.last_edited_by_id = admin.id
+    fichaje.last_edited_by_id = caller.id
     fichaje.last_edited_at = now
     session.add(fichaje)
     await session.commit()
@@ -512,21 +537,144 @@ async def superadmin_bulk_delete_fichajes(
     return {"deleted": len(body.ids)}
 
 
+@router.post("/admin", response_model=FichajeAdminRead, status_code=status.HTTP_201_CREATED)
+async def admin_create_fichaje(
+    body: FichajeAdminCreate,
+    caller: User = Depends(require_admin_or_superadmin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Create a fichaje manually on behalf of a worker.
+
+    Admin: only for users in their own company.
+    Superadmin: any user. The optional `company_id` in the body is ignored;
+    the company is derived from the target user.
+    """
+    import json
+
+    # 1. Resolve target user
+    target = await session.get(User, body.user_id)
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # 2. Tenant check
+    if caller.role == UserRole.admin and target.company_id != caller.company_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User does not belong to your company",
+        )
+
+    # 3. Normalize timestamps to naive UTC (consistent with rest of codebase)
+    new_start = _to_naive_utc(body.start_time)
+    new_end = _to_naive_utc(body.end_time)
+
+    # 4. Conflict check: if creating an open shift, target must not have one already
+    if new_end is None:
+        existing = await _get_active_fichaje(target.id, session)
+        if existing is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="El trabajador ya tiene una jornada activa.",
+            )
+
+    # 5. Quota check on the target's company (NOT the caller's)
+    await _check_fichaje_limit(target, session)
+
+    # 6. Determine final status
+    final_status = FichajeStatus.finished if new_end is not None else FichajeStatus.active
+
+    now = _now()
+    fichaje = Fichaje(
+        user_id=target.id,
+        start_time=new_start,
+        end_time=new_end,
+        status=final_status,
+        modalidad=body.modalidad or "presencial",
+        out_of_range=body.out_of_range,
+        edit_comment=body.edit_comment,
+        last_edited_by_id=caller.id,
+        last_edited_at=now,
+    )
+    session.add(fichaje)
+    await session.flush()
+
+    # 7. late_minutes — explicit value or computed from worker schedule
+    if body.late_minutes is not None:
+        fichaje.late_minutes = body.late_minutes
+    else:
+        fichaje.late_minutes = calculate_late_minutes(target, fichaje)
+
+    # 8. total_minutes — explicit override or computed when end_time is set
+    if body.total_minutes is not None:
+        fichaje.total_minutes = body.total_minutes
+    elif new_end is not None:
+        # No pausas on freshly-created manual fichaje
+        fichaje.total_minutes = calculate_total_minutes(fichaje, [])
+
+    # 9. Rest violation check (Art. 34.3 ET) — only meaningful for closed shifts
+    if new_end is not None:
+        last_result = await session.execute(
+            select(Fichaje)
+            .where(
+                Fichaje.user_id == target.id,
+                Fichaje.id != fichaje.id,
+                Fichaje.status == FichajeStatus.finished,
+                Fichaje.end_time.isnot(None),
+                Fichaje.is_deleted == False,
+                Fichaje.end_time < new_start,
+            )
+            .order_by(Fichaje.end_time.desc())
+            .limit(1)
+        )
+        last_fichaje = last_result.scalar_one_or_none()
+        if last_fichaje and last_fichaje.end_time:
+            rest_seconds = (new_start - last_fichaje.end_time).total_seconds()
+            if rest_seconds < 12 * 3600:
+                fichaje.rest_violation = True
+
+    # 10. Audit log entry — for creation, the snapshot is the post-state itself
+    snapshot_after = {
+        "start_time": fichaje.start_time.isoformat() if fichaje.start_time else None,
+        "end_time": fichaje.end_time.isoformat() if fichaje.end_time else None,
+        "status": fichaje.status.value if fichaje.status else None,
+        "total_minutes": fichaje.total_minutes,
+        "late_minutes": fichaje.late_minutes,
+        "out_of_range": fichaje.out_of_range,
+        "modalidad": fichaje.modalidad,
+        "edit_comment": fichaje.edit_comment,
+    }
+    create_log = FichajeEditLog(
+        fichaje_id=fichaje.id,
+        edited_by_id=caller.id,
+        comment=body.edit_comment,
+        original_data=json.dumps(snapshot_after),
+        action="create",
+    )
+    session.add(create_log)
+
+    session.add(fichaje)
+    await session.commit()
+    return await _reload(session, fichaje.id)
+
+
 @router.patch("/admin/{fichaje_id}", response_model=FichajeAdminRead)
 async def admin_edit_fichaje(
     fichaje_id: UUID,
     body: FichajeAdminUpdate,
-    admin: User = Depends(require_admin),
+    caller: User = Depends(require_admin_or_superadmin),
     session: AsyncSession = Depends(get_session),
 ):
     import json
-    from app.models.fichajeeditlog import FichajeEditLog
+
+    # Tenant filter: admin restricted to their company; superadmin sees all
+    where_clauses = [Fichaje.id == fichaje_id]
+    if caller.role == UserRole.admin:
+        where_clauses.append(User.company_id == caller.company_id)
 
     result = await session.execute(
         select(Fichaje)
         .join(User, Fichaje.user_id == User.id)
         .options(selectinload(Fichaje.pausas))
-        .where(Fichaje.id == fichaje_id, User.company_id == admin.company_id)
+        .where(*where_clauses)
     )
     fichaje = result.scalar_one_or_none()
     if not fichaje:
@@ -545,16 +693,21 @@ async def admin_edit_fichaje(
     }
     edit_log = FichajeEditLog(
         fichaje_id=fichaje.id,
-        edited_by_id=admin.id,
+        edited_by_id=caller.id,
         comment=body.edit_comment,
         original_data=json.dumps(original_snapshot),
+        action="update",
     )
     session.add(edit_log)
 
-    if body.start_time is not None:
-        fichaje.start_time = body.start_time
-    if body.end_time is not None:
-        fichaje.end_time = body.end_time
+    # Normalize incoming datetimes to naive UTC for consistent comparison/storage
+    new_start = _to_naive_utc(body.start_time)
+    new_end = _to_naive_utc(body.end_time)
+
+    if new_start is not None:
+        fichaje.start_time = new_start
+    if new_end is not None:
+        fichaje.end_time = new_end
     if body.status is not None:
         fichaje.status = body.status
     if body.late_minutes is not None:
@@ -564,16 +717,37 @@ async def admin_edit_fichaje(
     if body.modalidad is not None:
         fichaje.modalidad = body.modalidad
 
-    # If total_minutes explicitly provided, use it; otherwise auto-recalculate
-    # when start/end changed on a finished shift.
+    # Auto-close: if end_time was added and status not finished, mark finished
+    # and close any open pausas (same pattern as POST /end and admin/{id}/end).
+    end_time_added = new_end is not None
+    if end_time_added and fichaje.status != FichajeStatus.finished:
+        now = _now()
+        for p in fichaje.pausas:
+            if p.end_time is None:
+                p.end_time = now
+                session.add(p)
+        fichaje.status = FichajeStatus.finished
+
+    # Validate end > start if both are set after applying changes
+    if (
+        fichaje.end_time is not None
+        and fichaje.start_time is not None
+        and fichaje.end_time <= fichaje.start_time
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="end_time must be after start_time",
+        )
+
+    # Recalculate total_minutes whenever there is a closed range, regardless of
+    # the original status. Explicit override via body.total_minutes takes priority.
     if body.total_minutes is not None:
         fichaje.total_minutes = body.total_minutes
-    elif (body.start_time is not None or body.end_time is not None):
-        if fichaje.status == FichajeStatus.finished and fichaje.end_time is not None:
-            fichaje.total_minutes = calculate_total_minutes(fichaje, fichaje.pausas)
+    elif fichaje.end_time is not None and fichaje.start_time is not None:
+        fichaje.total_minutes = calculate_total_minutes(fichaje, fichaje.pausas)
 
     fichaje.edit_comment = body.edit_comment
-    fichaje.last_edited_by_id = admin.id
+    fichaje.last_edited_by_id = caller.id
     fichaje.last_edited_at = _now()
 
     session.add(fichaje)
@@ -608,17 +782,20 @@ def _compute_diff(before: dict, after: dict) -> "dict[str, FieldChange]":
 @router.get("/admin/{fichaje_id}/history", response_model=list[FichajeEditLogRead])
 async def admin_fichaje_history(
     fichaje_id: UUID,
-    admin: User = Depends(require_admin),
+    caller: User = Depends(require_admin_or_superadmin),
     session: AsyncSession = Depends(get_session),
 ):
     import json
-    from app.models.fichajeeditlog import FichajeEditLog
 
-    # Verify fichaje belongs to admin's company
+    # Verify fichaje exists and (for admin) belongs to their company
+    where_clauses = [Fichaje.id == fichaje_id]
+    if caller.role == UserRole.admin:
+        where_clauses.append(User.company_id == caller.company_id)
+
     result = await session.execute(
         select(Fichaje)
         .join(User, Fichaje.user_id == User.id)
-        .where(Fichaje.id == fichaje_id, User.company_id == admin.company_id)
+        .where(*where_clauses)
     )
     fichaje = result.scalar_one_or_none()
     if not fichaje:

@@ -65,3 +65,24 @@ async def require_superadmin(current_user: User = Depends(get_current_user)) -> 
             detail="Superadmin access required",
         )
     return current_user
+
+
+async def require_admin_or_superadmin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Permite acceso a admin (de su empresa) o superadmin (global).
+
+    Los handlers que la usen deben aplicar `current_user.company_id` como
+    filtro adicional cuando `current_user.role == UserRole.admin`.
+    """
+    if current_user.role not in (UserRole.admin, UserRole.superadmin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin or superadmin access required",
+        )
+    if current_user.role == UserRole.admin and current_user.company_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin account is not associated with a company. Contact a superadmin.",
+        )
+    return current_user

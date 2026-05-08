@@ -11,12 +11,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, Pencil, CheckCircle2, MapPin, MessageSquare, History } from "lucide-react";
+import { Search, Pencil, CheckCircle2, MapPin, MessageSquare, History, Plus } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ModalidadBadge } from "@/components/ModalidadBadge";
-import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 import { formatDateTime, minutesToHoursLabel } from "@/lib/utils";
+import FichajeEditDialog from "@/components/FichajeEditDialog";
+import CreateFichajeDialog from "@/components/CreateFichajeDialog";
 
 interface PausaAdmin {
   id: string;
@@ -163,16 +164,6 @@ function GeoModal({ fichaje, onClose }: { fichaje: FichajeAdmin; onClose: () => 
   );
 }
 
-interface EditForm {
-  start_time: string;
-  end_time: string;
-  status: string;
-  modalidad: string;
-  total_minutes: string;
-  late_minutes: string;
-  edit_comment: string;
-}
-
 function fmtDatetime(iso?: string): string {
   if (!iso) return "—";
   return formatDateTime(iso);
@@ -209,11 +200,6 @@ function formatFieldValue(field: string, value: string | null): string {
   return value;
 }
 
-function toInputDatetime(iso?: string): string {
-  if (!iso) return "";
-  return iso.slice(0, 16);
-}
-
 const PAGE_SIZE = 100;
 
 export default function AdminFichajesPage() {
@@ -232,17 +218,7 @@ export default function AdminFichajesPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<FichajeAdmin | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({
-    start_time: "",
-    end_time: "",
-    status: "",
-    modalidad: "presencial",
-    total_minutes: "",
-    late_minutes: "",
-    edit_comment: "",
-  });
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const fetchFichajes = async (pageNum = page) => {
     setLoading(true);
@@ -277,20 +253,6 @@ export default function AdminFichajesPage() {
     }
   };
 
-  const openEdit = (f: FichajeAdmin) => {
-    setEditTarget(f);
-    setSaveError(null);
-    setEditForm({
-      start_time: toInputDatetime(f.start_time),
-      end_time: toInputDatetime(f.end_time),
-      status: f.status,
-      modalidad: f.modalidad ?? "presencial",
-      total_minutes: f.total_minutes != null ? String(f.total_minutes) : "",
-      late_minutes: f.late_minutes != null ? String(f.late_minutes) : "",
-      edit_comment: "",
-    });
-  };
-
   const openHistory = async (f: FichajeAdmin) => {
     setHistoryTarget(f);
     setHistoryLoading(true);
@@ -306,35 +268,15 @@ export default function AdminFichajesPage() {
     }
   };
 
-  const handleSave = async () => {
-    if (!editTarget) return;
-    if (editForm.edit_comment.trim().length < 3) {
-      setSaveError("El motivo del cambio es obligatorio (mínimo 3 caracteres)");
-      return;
-    }
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const body: Record<string, string | number> = { edit_comment: editForm.edit_comment.trim() };
-      if (editForm.start_time) body.start_time = editForm.start_time + ":00";
-      if (editForm.end_time) body.end_time = editForm.end_time + ":00";
-      if (editForm.status) body.status = editForm.status;
-      if (editForm.modalidad) body.modalidad = editForm.modalidad;
-      if (editForm.total_minutes !== "") body.total_minutes = Number(editForm.total_minutes);
-      if (editForm.late_minutes !== "") body.late_minutes = Number(editForm.late_minutes);
-      await api.patch(`/fichajes/admin/${editTarget.id}`, body);
-      setEditTarget(null);
-      await fetchFichajes();
-    } catch (e: any) {
-      setSaveError(e.response?.data?.detail || "Error al guardar");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Gestión de Fichajes</h1>
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <h1 className="text-2xl font-bold">Gestión de Fichajes</h1>
+        <Button onClick={() => setCreateOpen(true)} className="flex items-center gap-2">
+          <Plus className="w-4 h-4" />
+          Nuevo fichaje
+        </Button>
+      </div>
 
       {/* Filter bar */}
       <div className="bg-white border rounded-lg p-4 mb-6">
@@ -503,7 +445,7 @@ export default function AdminFichajesPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => openEdit(f)}
+                          onClick={() => setEditTarget(f)}
                           className="flex items-center gap-1 text-xs"
                         >
                           <Pencil className="w-3 h-3" aria-hidden="true" />
@@ -651,120 +593,20 @@ export default function AdminFichajesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit dialog */}
-      <Dialog open={editTarget != null} onOpenChange={(open) => !open && setEditTarget(null)}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              Editar Fichaje
-              {editTarget?.user && (
-                <span className="text-sm font-normal text-muted-foreground ml-2">
-                  — {editTarget.user.full_name}
-                </span>
-              )}
-            </DialogTitle>
-          </DialogHeader>
+      {/* Edit dialog (extracted) */}
+      <FichajeEditDialog
+        target={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSaved={() => fetchFichajes()}
+      />
 
-          <div className="space-y-5">
-            {/* Tiempos */}
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide border-b pb-1 mb-3">Tiempos</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>Inicio</Label>
-                  <Input
-                    type="datetime-local"
-                    value={editForm.start_time}
-                    onChange={(e) => setEditForm((p) => ({ ...p, start_time: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Fin <span className="text-muted-foreground text-xs">(opcional)</span></Label>
-                  <Input
-                    type="datetime-local"
-                    value={editForm.end_time}
-                    onChange={(e) => setEditForm((p) => ({ ...p, end_time: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Estado</Label>
-                  <select
-                    value={editForm.status}
-                    onChange={(e) => setEditForm((p) => ({ ...p, status: e.target.value }))}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                  >
-                    <option value="active">Activo</option>
-                    <option value="paused">Pausado</option>
-                    <option value="finished">Finalizado</option>
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <Label>Modalidad</Label>
-                  <select
-                    value={editForm.modalidad}
-                    onChange={(e) => setEditForm((p) => ({ ...p, modalidad: e.target.value }))}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                  >
-                    <option value="presencial">Presencial</option>
-                    <option value="teletrabajo">Teletrabajo</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Cálculos */}
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide border-b pb-1 mb-3">Cálculos <span className="text-slate-400 normal-case font-normal">(opcionales)</span></p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>Min. trabajados</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    placeholder="Auto-calculado"
-                    value={editForm.total_minutes}
-                    onChange={(e) => setEditForm((p) => ({ ...p, total_minutes: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Min. tarde</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={editForm.late_minutes}
-                    onChange={(e) => setEditForm((p) => ({ ...p, late_minutes: e.target.value }))}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Auditoría */}
-            <div className="bg-amber-50 rounded-lg p-3 space-y-1">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide pb-1">Auditoría</p>
-              <Label>
-                Motivo del cambio <span className="text-destructive">*</span>
-              </Label>
-              <Textarea
-                placeholder="Describe el motivo de la edición (obligatorio, mín. 3 caracteres)"
-                rows={3}
-                value={editForm.edit_comment}
-                onChange={(e) => setEditForm((p) => ({ ...p, edit_comment: e.target.value }))}
-              />
-            </div>
-
-            {saveError && <p className="text-sm text-destructive" role="alert">{saveError}</p>}
-
-            <div className="flex gap-3 justify-end pt-2">
-              <Button variant="outline" onClick={() => setEditTarget(null)} disabled={saving}>
-                Cancelar
-              </Button>
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? "Guardando..." : "Guardar"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Create dialog */}
+      <CreateFichajeDialog
+        open={createOpen}
+        mode="admin"
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => fetchFichajes()}
+      />
     </div>
   );
 }

@@ -151,6 +151,8 @@ async def _run_column_migrations() -> None:
             year INTEGER NOT NULL
         )''',
         'CREATE INDEX IF NOT EXISTS ix_public_holiday_region_year ON public_holiday (region_code, year)',
+        # fichaje_edit_log: action discriminator ('create' | 'update' | 'force_end')
+        "ALTER TABLE fichaje_edit_log ADD COLUMN IF NOT EXISTS action VARCHAR NOT NULL DEFAULT 'update'",
     ]
 
     for _sql in _migrations:

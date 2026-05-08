@@ -5,10 +5,13 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Search, Trash2, MessageSquare } from "lucide-react";
+import { Search, Trash2, MessageSquare, Pencil, Plus } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { format } from "date-fns";
 import { minutesToHoursLabel } from "@/lib/utils";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import FichajeEditDialog, { FichajeEditTarget } from "@/components/FichajeEditDialog";
+import CreateFichajeDialog from "@/components/CreateFichajeDialog";
 
 interface CompanyOption {
   id: string;
@@ -54,6 +57,11 @@ export default function SuperadminFichajesPage() {
   const [toDate, setToDate] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<FichajeEditTarget | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
+
   useEffect(() => {
     api.get<CompanyOption[]>("/companies").then((r) => setCompanies(r.data)).catch(() => {});
     fetchFichajes();
@@ -79,13 +87,14 @@ export default function SuperadminFichajesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar este fichaje? Esta acción no se puede deshacer.")) return;
     try {
       await api.delete(`/fichajes/admin/${id}`);
       setFichajes((prev) => prev.filter((f) => f.id !== id));
       setSelected((prev) => { const s = new Set(prev); s.delete(id); return s; });
     } catch (e: any) {
       setError(e.response?.data?.detail || "Error al eliminar el fichaje");
+    } finally {
+      setConfirmDeleteId(null);
     }
   };
 
@@ -104,7 +113,6 @@ export default function SuperadminFichajesPage() {
 
   const handleBulkDelete = async () => {
     if (selected.size === 0) return;
-    if (!confirm(`¿Eliminar ${selected.size} fichaje${selected.size > 1 ? "s" : ""}? Esta acción no se puede deshacer.`)) return;
     setBulkDeleting(true);
     setError(null);
     try {
@@ -115,12 +123,19 @@ export default function SuperadminFichajesPage() {
       setError(e.response?.data?.detail || "Error al eliminar los fichajes");
     } finally {
       setBulkDeleting(false);
+      setConfirmBulkOpen(false);
     }
   };
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Fichajes — Vista global</h1>
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <h1 className="text-2xl font-bold">Fichajes — Vista global</h1>
+        <Button onClick={() => setCreateOpen(true)} className="flex items-center gap-2">
+          <Plus className="w-4 h-4" />
+          Nuevo fichaje
+        </Button>
+      </div>
 
       {/* Filter bar */}
       <div className="bg-white border rounded-lg p-4 mb-6">
@@ -175,7 +190,7 @@ export default function SuperadminFichajesPage() {
           <Button
             size="sm"
             variant="destructive"
-            onClick={handleBulkDelete}
+            onClick={() => setConfirmBulkOpen(true)}
             disabled={bulkDeleting}
             className="flex items-center gap-1"
           >
@@ -282,11 +297,20 @@ export default function SuperadminFichajesPage() {
                       )}
                     </td>
                     <td className="p-3">
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="flex items-center justify-center gap-2 flex-wrap">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEditTarget(f as FichajeEditTarget)}
+                          className="flex items-center gap-1 text-xs"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          Editar
+                        </Button>
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => handleDelete(f.id)}
+                          onClick={() => setConfirmDeleteId(f.id)}
                           className="flex items-center gap-1 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
                         >
                           <Trash2 className="w-3 h-3" />
@@ -301,6 +325,41 @@ export default function SuperadminFichajesPage() {
           </table>
         </div>
       </div>
+
+      {/* Create dialog */}
+      <CreateFichajeDialog
+        open={createOpen}
+        mode="superadmin"
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => fetchFichajes()}
+      />
+
+      {/* Edit dialog */}
+      <FichajeEditDialog
+        target={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSaved={() => fetchFichajes()}
+      />
+
+      {/* Single delete confirm */}
+      <ConfirmDialog
+        open={confirmDeleteId != null}
+        title="Eliminar fichaje"
+        description="¿Seguro que quieres eliminar este fichaje? Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        onCancel={() => setConfirmDeleteId(null)}
+        onConfirm={() => confirmDeleteId && handleDelete(confirmDeleteId)}
+      />
+
+      {/* Bulk delete confirm */}
+      <ConfirmDialog
+        open={confirmBulkOpen}
+        title="Eliminar fichajes seleccionados"
+        description={`¿Seguro que quieres eliminar ${selected.size} fichaje${selected.size > 1 ? "s" : ""}? Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        onCancel={() => setConfirmBulkOpen(false)}
+        onConfirm={handleBulkDelete}
+      />
     </div>
   );
 }

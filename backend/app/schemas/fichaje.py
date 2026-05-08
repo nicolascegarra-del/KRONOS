@@ -1,7 +1,7 @@
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.models.fichaje import FichajeStatus
 
@@ -86,6 +86,40 @@ class FichajeAdminUpdate(BaseModel):
     out_of_range: Optional[bool] = None
     modalidad: Optional[str] = None
     edit_comment: str = Field(min_length=3)
+
+
+class FichajeAdminCreate(BaseModel):
+    """Payload para que admin/superadmin creen un fichaje manualmente.
+
+    El backend ignora `company_id` y deriva la empresa del `user_id`. Para admin,
+    se valida que el target pertenezca a su empresa; para superadmin no hay filtro.
+    """
+
+    user_id: UUID
+    company_id: Optional[UUID] = None  # informativo en superadmin
+    start_time: datetime
+    end_time: Optional[datetime] = None
+    modalidad: Optional[str] = "presencial"
+    late_minutes: Optional[int] = Field(default=None, ge=0)
+    total_minutes: Optional[int] = Field(default=None, ge=0)
+    out_of_range: Optional[bool] = False
+    edit_comment: str = Field(min_length=3, max_length=500)
+
+    @model_validator(mode="after")
+    def _validate(self) -> "FichajeAdminCreate":
+        if self.modalidad not in (None, "presencial", "teletrabajo"):
+            raise ValueError("modalidad must be 'presencial' or 'teletrabajo'")
+        if self.end_time is not None and self.start_time is not None:
+            if self.end_time <= self.start_time:
+                raise ValueError("end_time must be after start_time")
+        # start_time no puede ser futuro (margen 5 min para desfase de reloj)
+        now_utc = datetime.now(timezone.utc)
+        st = self.start_time
+        if st is not None:
+            st_utc = st.astimezone(timezone.utc) if st.tzinfo else st.replace(tzinfo=timezone.utc)
+            if st_utc > now_utc + timedelta(minutes=5):
+                raise ValueError("start_time cannot be in the future")
+        return self
 
 
 class FieldChange(BaseModel):
