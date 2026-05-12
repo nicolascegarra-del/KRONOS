@@ -3,7 +3,7 @@ from datetime import date, datetime, time
 from typing import Optional
 from pydantic import BaseModel, EmailStr
 
-from app.models.user import UserRole
+from app.models.user import UserRole, VacationDaysType
 
 
 class UserCreate(BaseModel):
@@ -24,6 +24,7 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     dni: Optional[str] = None
     vacation_days: Optional[int] = None
+    vacation_days_type: Optional[VacationDaysType] = None
     # HR profile
     position: Optional[str] = None
     department: Optional[str] = None
@@ -77,6 +78,7 @@ class UserRead(BaseModel):
     dni: Optional[str] = None
     geo_consent: Optional[bool] = None
     vacation_days: int = 22
+    vacation_days_type: VacationDaysType = VacationDaysType.laborales
     # HR profile
     position: Optional[str] = None
     department: Optional[str] = None

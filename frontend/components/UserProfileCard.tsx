@@ -2,14 +2,6 @@
 
 import { User } from "lucide-react"
 
-const CONTRACT_TYPE_LABELS: Record<string, string> = {
-  indefinido: "Indefinido",
-  temporal: "Temporal",
-  practicas: "Prácticas",
-  formacion: "Formación",
-  autonomo: "Autónomo",
-}
-
 const CCAA_NAMES: Record<string, string> = {
   "ES-AN": "Andalucía", "ES-AR": "Aragón", "ES-AS": "Asturias",
   "ES-IB": "Illes Balears", "ES-CN": "Canarias", "ES-CB": "Cantabria",
@@ -30,9 +22,6 @@ export interface UserProfile {
   dni?: string
   position?: string
   department?: string
-  contract_type?: string
-  contract_start?: string
-  contract_end?: string
   region_code?: string
   vacation_days?: number
 }
@@ -55,12 +44,6 @@ export default function UserProfileCard({ profile, readonlyHint = false }: Props
     { label: "DNI / NIF", value: profile.dni },
     { label: "Puesto / cargo", value: profile.position },
     { label: "Departamento", value: profile.department },
-    {
-      label: "Tipo de contrato",
-      value: profile.contract_type
-        ? (CONTRACT_TYPE_LABELS[profile.contract_type] ?? profile.contract_type)
-        : undefined,
-    },
     {
       label: "Comunidad autónoma",
       value: profile.region_code

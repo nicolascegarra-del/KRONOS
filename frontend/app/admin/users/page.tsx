@@ -40,11 +40,9 @@ interface User {
   scheduled_end?: string;
   dni?: string;
   vacation_days?: number;
+  vacation_days_type?: "laborales" | "naturales";
   position?: string;
   department?: string;
-  contract_type?: string;
-  contract_start?: string;
-  contract_end?: string;
   region_code?: string;
 }
 
@@ -56,11 +54,9 @@ interface UserFormData {
   scheduled_end: string;
   dni: string;
   vacation_days: string;
+  vacation_days_type: "laborales" | "naturales";
   position: string;
   department: string;
-  contract_type: string;
-  contract_start: string;
-  contract_end: string;
   region_code: string;
 }
 
@@ -72,11 +68,9 @@ const emptyForm: UserFormData = {
   scheduled_end: "",
   dni: "",
   vacation_days: "22",
+  vacation_days_type: "laborales",
   position: "",
   department: "",
-  contract_type: "",
-  contract_start: "",
-  contract_end: "",
   region_code: "",
 };
 
@@ -169,11 +163,9 @@ export default function UsersPage() {
       scheduled_end: u.scheduled_end || "",
       dni: u.dni || "",
       vacation_days: String(u.vacation_days ?? 22),
+      vacation_days_type: u.vacation_days_type ?? "laborales",
       position: u.position || "",
       department: u.department || "",
-      contract_type: u.contract_type || "",
-      contract_start: u.contract_start || "",
-      contract_end: u.contract_end || "",
       region_code: u.region_code || "",
     });
     setError(null);
@@ -251,9 +243,6 @@ export default function UsersPage() {
       const hrFields = {
         position: form.position || null,
         department: form.department || null,
-        contract_type: form.contract_type || null,
-        contract_start: form.contract_start || null,
-        contract_end: form.contract_end || null,
         region_code: form.region_code || null,
       };
       if (editUser) {
@@ -263,6 +252,7 @@ export default function UsersPage() {
           scheduled_end: form.scheduled_end || null,
           dni: form.dni || null,
           vacation_days: form.vacation_days ? parseInt(form.vacation_days) : 22,
+          vacation_days_type: form.vacation_days_type,
           ...hrFields,
         });
       } else {
@@ -274,6 +264,7 @@ export default function UsersPage() {
           scheduled_end: form.scheduled_end || null,
           dni: form.dni || null,
           vacation_days: form.vacation_days ? parseInt(form.vacation_days) : 22,
+          vacation_days_type: form.vacation_days_type,
           ...hrFields,
         });
       }
@@ -531,14 +522,33 @@ export default function UsersPage() {
               </div>
               <div className="space-y-2">
                 <Label>Días de vacaciones / año</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="365"
-                  value={form.vacation_days}
-                  onChange={(e) => setForm({ ...form, vacation_days: e.target.value })}
-                  placeholder="22"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    min="0"
+                    max="365"
+                    value={form.vacation_days}
+                    onChange={(e) => setForm({ ...form, vacation_days: e.target.value })}
+                    placeholder={form.vacation_days_type === "naturales" ? "30" : "22"}
+                    className="flex-1"
+                  />
+                  <select
+                    value={form.vacation_days_type}
+                    onChange={(e) =>
+                      setForm({ ...form, vacation_days_type: e.target.value as "laborales" | "naturales" })
+                    }
+                    className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                    aria-label="Tipo de días de vacaciones"
+                  >
+                    <option value="laborales">Laborales</option>
+                    <option value="naturales">Naturales</option>
+                  </select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {form.vacation_days_type === "laborales"
+                    ? "Solo se cuentan días laborables (L-V, sin festivos)."
+                    : "Se cuentan todos los días, incluidos fines de semana y festivos."}
+                </p>
               </div>
             </div>
 
@@ -580,43 +590,6 @@ export default function UsersPage() {
                     value={form.department}
                     onChange={(e) => setForm({ ...form, department: e.target.value })}
                     placeholder="Ej: Operaciones"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Tipo de contrato</Label>
-                <select
-                  value={form.contract_type}
-                  onChange={(e) => setForm({ ...form, contract_type: e.target.value })}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                >
-                  <option value="">— Sin especificar —</option>
-                  <option value="indefinido">Indefinido</option>
-                  <option value="temporal">Temporal</option>
-                  <option value="practicas">Prácticas</option>
-                  <option value="formacion">Formación</option>
-                  <option value="autonomo">Autónomo</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label>Fecha inicio contrato</Label>
-                  <Input
-                    type="date"
-                    value={form.contract_start}
-                    onChange={(e) => setForm({ ...form, contract_start: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Fecha fin contrato</Label>
-                  <Input
-                    type="date"
-                    value={form.contract_end}
-                    min={form.contract_start}
-                    onChange={(e) => setForm({ ...form, contract_end: e.target.value })}
-                    placeholder="Vacío = indefinido"
                   />
                 </div>
               </div>

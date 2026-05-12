@@ -13,14 +13,6 @@ import {
 } from "@/components/ui/dialog"
 import UserProfileCard, { UserProfile } from "@/components/UserProfileCard"
 
-const CONTRACT_TYPES = [
-  { value: "indefinido", label: "Indefinido" },
-  { value: "temporal", label: "Temporal" },
-  { value: "practicas", label: "Prácticas" },
-  { value: "formacion", label: "Formación" },
-  { value: "autonomo", label: "Autónomo" },
-]
-
 const CCAA_OPTIONS = [
   { value: "ES-AN", label: "Andalucía" },
   { value: "ES-AR", label: "Aragón" },
@@ -46,9 +38,6 @@ interface EditForm {
   dni: string
   position: string
   department: string
-  contract_type: string
-  contract_start: string
-  contract_end: string
   region_code: string
 }
 
@@ -61,9 +50,6 @@ export default function SuperadminProfilePage() {
     dni: "",
     position: "",
     department: "",
-    contract_type: "",
-    contract_start: "",
-    contract_end: "",
     region_code: "",
   })
   const [saving, setSaving] = useState(false)
@@ -83,9 +69,6 @@ export default function SuperadminProfilePage() {
       dni: profile.dni ?? "",
       position: profile.position ?? "",
       department: profile.department ?? "",
-      contract_type: profile.contract_type ?? "",
-      contract_start: profile.contract_start ?? "",
-      contract_end: profile.contract_end ?? "",
       region_code: profile.region_code ?? "",
     })
     setError(null)
@@ -102,9 +85,6 @@ export default function SuperadminProfilePage() {
       if (form.dni) payload.dni = form.dni
       if (form.position) payload.position = form.position
       if (form.department) payload.department = form.department
-      if (form.contract_type) payload.contract_type = form.contract_type
-      if (form.contract_start) payload.contract_start = form.contract_start
-      if (form.contract_end) payload.contract_end = form.contract_end
       if (form.region_code) payload.region_code = form.region_code
 
       const res = await api.put<UserProfile>(`/superadmin/users/${profile.id}`, payload)
@@ -161,29 +141,6 @@ export default function SuperadminProfilePage() {
             <div className="space-y-1.5">
               <Label>Departamento</Label>
               <Input value={form.department} onChange={(e) => setField("department", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Tipo de contrato</Label>
-              <select
-                value={form.contract_type}
-                onChange={(e) => setField("contract_type", e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                <option value="">Seleccionar...</option>
-                {CONTRACT_TYPES.map((ct) => (
-                  <option key={ct.value} value={ct.value}>{ct.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Fecha inicio contrato</Label>
-                <Input type="date" value={form.contract_start} onChange={(e) => setField("contract_start", e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Fecha fin contrato</Label>
-                <Input type="date" value={form.contract_end} onChange={(e) => setField("contract_end", e.target.value)} />
-              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Comunidad autónoma</Label>

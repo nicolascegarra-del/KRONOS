@@ -94,6 +94,7 @@ async def run_migrations() -> None:
         _pg_migrations = [
             # user columns
             'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES company(id)',
+            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS vacation_days_type VARCHAR NOT NULL DEFAULT \'laborales\'',
             # fichaje geo columns
             "ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS start_lat DOUBLE PRECISION",
             "ALTER TABLE fichaje ADD COLUMN IF NOT EXISTS start_lng DOUBLE PRECISION",

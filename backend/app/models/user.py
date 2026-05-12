@@ -17,6 +17,12 @@ class UserRole(str, Enum):
     worker = "worker"
 
 
+class VacationDaysType(str, Enum):
+    """Si los días anuales de vacaciones se cuentan como laborales (L-V, sin festivos) o naturales (todos)."""
+    laborales = "laborales"
+    naturales = "naturales"
+
+
 class User(SQLModel, table=True):
     __tablename__ = "user"
 
@@ -33,6 +39,7 @@ class User(SQLModel, table=True):
     company_id: Optional[UUID] = Field(default=None, foreign_key="company.id", index=True)
 
     vacation_days: int = Field(default=22)  # total vacation days allocated per year
+    vacation_days_type: VacationDaysType = Field(default=VacationDaysType.laborales)
     monthly_report_enabled: bool = Field(default=False)
 
     dni: Optional[str] = Field(default=None)
