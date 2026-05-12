@@ -13,8 +13,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, UserX, UserCheck, CalendarDays, KeyRound } from "lucide-react";
+import { Plus, Pencil, UserX, UserCheck, CalendarDays, KeyRound, Search } from "lucide-react";
 import { roleLabel } from "@/lib/roleLabels";
+import { useTableSort } from "@/hooks/useTableSort";
+import { SortableTableHeader } from "@/components/SortableTableHeader";
 
 const CCAA = [
   { code: "ES-AN", name: "Andalucía" }, { code: "ES-AR", name: "Aragón" },
@@ -113,6 +115,11 @@ export default function UsersPage() {
   const [bulkEnd2, setBulkEnd2] = useState("20:00")
   const [scheduleLoading, setScheduleLoading] = useState(false)
 
+  // Filtros
+  const [filterRole, setFilterRole] = useState<"" | "admin" | "worker">("");
+  const [filterStatus, setFilterStatus] = useState<"" | "active" | "inactive">("");
+  const [search, setSearch] = useState("");
+
   const fetchUsers = () => {
     setLoading(true);
     api
@@ -124,6 +131,26 @@ export default function UsersPage() {
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  // Filtrado en cliente (la lista viene completa del endpoint)
+  const filteredUsers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return users.filter((u) => {
+      if (filterRole && u.role !== filterRole) return false;
+      if (filterStatus === "active" && !u.is_active) return false;
+      if (filterStatus === "inactive" && u.is_active) return false;
+      if (q) {
+        const haystack = `${u.full_name} ${u.email} ${u.dni ?? ""}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [users, filterRole, filterStatus, search]);
+
+  const { sorted: visibleUsers, sortKey, direction, handleSort } = useTableSort(
+    filteredUsers as unknown as Record<string, unknown>[],
+    "full_name"
+  );
 
   const openCreate = () => {
     setEditUser(null);
@@ -322,17 +349,47 @@ export default function UsersPage() {
         <ImportWorkers />
       </div>
 
+      <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="relative sm:col-span-2 lg:col-span-2">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nombre, email o DNI…"
+            className="pl-9"
+          />
+        </div>
+        <select
+          value={filterRole}
+          onChange={(e) => setFilterRole(e.target.value as "" | "admin" | "worker")}
+          className="flex h-9 w-full rounded-md border border-input bg-white px-3 py-1 text-sm shadow-sm"
+        >
+          <option value="">Todos los roles</option>
+          <option value="admin">Administrador</option>
+          <option value="worker">Trabajador</option>
+        </select>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value as "" | "active" | "inactive")}
+          className="flex h-9 w-full rounded-md border border-input bg-white px-3 py-1 text-sm shadow-sm"
+        >
+          <option value="">Activos e inactivos</option>
+          <option value="active">Solo activos</option>
+          <option value="inactive">Solo inactivos</option>
+        </select>
+      </div>
+
       <div className="bg-white rounded-lg border overflow-hidden">
         <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b sticky top-0 z-10">
               <tr>
-                <th className="text-left p-3 font-medium">Nombre</th>
-                <th className="text-left p-3 font-medium">Email</th>
-                <th className="text-left p-3 font-medium">DNI/NIF</th>
-                <th className="text-left p-3 font-medium">Rol</th>
+                <SortableTableHeader label="Nombre" sortKey="full_name" currentKey={sortKey} currentDirection={direction} onSort={handleSort} />
+                <SortableTableHeader label="Email" sortKey="email" currentKey={sortKey} currentDirection={direction} onSort={handleSort} />
+                <SortableTableHeader label="DNI/NIF" sortKey="dni" currentKey={sortKey} currentDirection={direction} onSort={handleSort} />
+                <SortableTableHeader label="Rol" sortKey="role" currentKey={sortKey} currentDirection={direction} onSort={handleSort} />
                 <th className="text-left p-3 font-medium">Horario</th>
-                <th className="text-left p-3 font-medium">Estado</th>
+                <SortableTableHeader label="Estado" sortKey="is_active" currentKey={sortKey} currentDirection={direction} onSort={handleSort} />
                 <th className="text-right p-3 font-medium">Acciones</th>
               </tr>
             </thead>
@@ -349,8 +406,14 @@ export default function UsersPage() {
                     <td className="p-3 text-right"><div className="h-8 w-24 animate-pulse bg-slate-200 rounded ml-auto" /></td>
                   </tr>
                 ))
+              ) : visibleUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-6 text-center text-muted-foreground text-sm">
+                    No hay trabajadores que coincidan con los filtros.
+                  </td>
+                </tr>
               ) : (
-                users.map((u) => (
+                (visibleUsers as unknown as User[]).map((u) => (
                   <tr key={u.id} className="border-b last:border-0 hover:bg-slate-50">
                     <td className="p-3 font-medium">{u.full_name}</td>
                     <td className="p-3 text-muted-foreground">{u.email}</td>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,8 +11,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Pencil, Trash2, FileX, Users, ChevronDown, X, UserPlus } from "lucide-react";
+import { Pencil, Trash2, FileX, Users, ChevronDown, X, UserPlus, Search } from "lucide-react";
 import { ROLE_LABELS } from "@/lib/roleLabels";
+import { useTableSort } from "@/hooks/useTableSort";
+import { SortableTableHeader } from "@/components/SortableTableHeader";
 
 interface CompanyOption {
   id: string;
@@ -264,6 +266,12 @@ export default function SuperadminUsersPage() {
   const [bulkMsg, setBulkMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [confirmAction, setConfirmAction] = useState<null | "deleteUsers" | "deleteFichajes">(null);
 
+  // Filtros
+  const [filterCompany, setFilterCompany] = useState<string>("");
+  const [filterRole, setFilterRole] = useState<"" | "superadmin" | "admin" | "worker">("");
+  const [filterStatus, setFilterStatus] = useState<"" | "active" | "inactive">("");
+  const [search, setSearch] = useState("");
+
   const load = async () => {
     try {
       const [usersRes, companiesRes] = await Promise.all([
@@ -282,7 +290,32 @@ export default function SuperadminUsersPage() {
 
   useEffect(() => { load(); }, []);
 
-  const selectableIds = users.filter((u) => u.role !== "superadmin").map((u) => u.id);
+  // Filtrado en cliente
+  const filteredUsers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return users.filter((u) => {
+      if (filterCompany === "__none__") {
+        if (u.company_id !== null) return false;
+      } else if (filterCompany && u.company_id !== filterCompany) {
+        return false;
+      }
+      if (filterRole && u.role !== filterRole) return false;
+      if (filterStatus === "active" && !u.is_active) return false;
+      if (filterStatus === "inactive" && u.is_active) return false;
+      if (q) {
+        const haystack = `${u.full_name} ${u.email} ${u.dni ?? ""} ${u.company_name ?? ""}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [users, filterCompany, filterRole, filterStatus, search]);
+
+  const { sorted: visibleUsers, sortKey, direction, handleSort } = useTableSort(
+    filteredUsers as unknown as Record<string, unknown>[],
+    "full_name"
+  );
+
+  const selectableIds = filteredUsers.filter((u) => u.role !== "superadmin").map((u) => u.id);
   const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectableIds));
   const toggleOne = (id: string) => setSelected((prev) => {
@@ -439,6 +472,48 @@ export default function SuperadminUsersPage() {
         </p>
       )}
 
+      <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nombre, email, DNI o empresa…"
+            className="pl-9"
+          />
+        </div>
+        <select
+          value={filterCompany}
+          onChange={(e) => setFilterCompany(e.target.value)}
+          className="flex h-9 w-full rounded-md border border-input bg-white px-3 py-1 text-sm shadow-sm"
+        >
+          <option value="">Todas las empresas</option>
+          <option value="__none__">Sin empresa</option>
+          {companies.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+        <select
+          value={filterRole}
+          onChange={(e) => setFilterRole(e.target.value as "" | "superadmin" | "admin" | "worker")}
+          className="flex h-9 w-full rounded-md border border-input bg-white px-3 py-1 text-sm shadow-sm"
+        >
+          <option value="">Todos los roles</option>
+          <option value="superadmin">Superadmin</option>
+          <option value="admin">Administrador</option>
+          <option value="worker">Trabajador</option>
+        </select>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value as "" | "active" | "inactive")}
+          className="flex h-9 w-full rounded-md border border-input bg-white px-3 py-1 text-sm shadow-sm"
+        >
+          <option value="">Activos e inactivos</option>
+          <option value="active">Solo activos</option>
+          <option value="inactive">Solo inactivos</option>
+        </select>
+      </div>
+
       <div className="bg-white border rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -447,16 +522,22 @@ export default function SuperadminUsersPage() {
                 <th className="p-3 w-10">
                   <input type="checkbox" checked={allSelected} onChange={toggleAll} className="h-4 w-4 rounded border-gray-300" title="Seleccionar todos (excepto superadmins)" />
                 </th>
-                <th className="text-left p-3 font-medium">Nombre</th>
-                <th className="text-left p-3 font-medium">Email</th>
-                <th className="text-center p-3 font-medium">Rol</th>
-                <th className="text-left p-3 font-medium">Empresa</th>
-                <th className="text-center p-3 font-medium">Activo</th>
+                <SortableTableHeader label="Nombre" sortKey="full_name" currentKey={sortKey} currentDirection={direction} onSort={handleSort} />
+                <SortableTableHeader label="Email" sortKey="email" currentKey={sortKey} currentDirection={direction} onSort={handleSort} />
+                <SortableTableHeader label="Rol" sortKey="role" currentKey={sortKey} currentDirection={direction} onSort={handleSort} align="center" />
+                <SortableTableHeader label="Empresa" sortKey="company_name" currentKey={sortKey} currentDirection={direction} onSort={handleSort} />
+                <SortableTableHeader label="Activo" sortKey="is_active" currentKey={sortKey} currentDirection={direction} onSort={handleSort} align="center" />
                 <th className="text-center p-3 font-medium">Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => {
+              {visibleUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-6 text-center text-muted-foreground text-sm">
+                    No hay usuarios que coincidan con los filtros.
+                  </td>
+                </tr>
+              ) : (visibleUsers as unknown as UserRow[]).map((u) => {
                 const isSuperadmin = u.role === "superadmin";
                 const isChecked = selected.has(u.id);
                 return (
