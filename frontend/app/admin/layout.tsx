@@ -52,19 +52,11 @@ export default function AdminLayout({
   const [features, setFeatures] = useState<Features>({ schedule_enabled: true, vacation_enabled: true, docs_enabled: false });
 
   useEffect(() => {
-    const CACHE_KEY = "company_features";
-    const CACHE_TTL = 5 * 60 * 1000; // 5 min
-    try {
-      const raw = sessionStorage.getItem(CACHE_KEY);
-      if (raw) {
-        const { data, ts } = JSON.parse(raw);
-        if (Date.now() - ts < CACHE_TTL) { setFeatures(data); return; }
-      }
-    } catch { /* ignore */ }
-    api.get<Features>("/companies/features").then((r) => {
-      setFeatures(r.data);
-      try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data: r.data, ts: Date.now() })); } catch { /* ignore */ }
-    }).catch(() => {});
+    // Sin cache: el superadmin puede activar/desactivar módulos en cualquier
+    // momento y los admins necesitan reflejarlo sin tener que cerrar sesión.
+    api.get<Features>("/companies/features")
+      .then((r) => setFeatures(r.data))
+      .catch(() => {});
   }, []);
 
   const navItems = BASE_NAV.filter(

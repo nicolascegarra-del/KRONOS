@@ -33,24 +33,15 @@ export default function WorkerLayout({
   const [unreadDocs, setUnreadDocs] = useState(0);
 
   useEffect(() => {
-    const CACHE_KEY = "company_features";
-    const CACHE_TTL = 5 * 60 * 1000; // 5 min
-    const applyFeatures = (f: Features) => {
-      setFeatures(f);
-      if (f.docs_enabled) {
-        api.get<UnreadCount>("/documents/unread-count").then((u) => setUnreadDocs(u.data.count)).catch(() => {});
-      }
-    };
-    try {
-      const raw = sessionStorage.getItem(CACHE_KEY);
-      if (raw) {
-        const { data, ts } = JSON.parse(raw);
-        if (Date.now() - ts < CACHE_TTL) { applyFeatures(data); return; }
-      }
-    } catch { /* ignore */ }
+    // Sin cache: el admin/superadmin puede activar/desactivar módulos en
+    // cualquier momento; el trabajador debe verlo sin cerrar sesión.
     api.get<Features>("/companies/features").then((r) => {
-      try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data: r.data, ts: Date.now() })); } catch { /* ignore */ }
-      applyFeatures(r.data);
+      setFeatures(r.data);
+      if (r.data.docs_enabled) {
+        api.get<UnreadCount>("/documents/unread-count")
+          .then((u) => setUnreadDocs(u.data.count))
+          .catch(() => {});
+      }
     }).catch(() => {});
   }, []);
 
