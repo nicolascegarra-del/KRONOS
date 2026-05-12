@@ -124,6 +124,98 @@ async def get_holidays(
     return [HolidayOut(holiday_date=r.holiday_date, name=r.name, region_code=r.region_code) for r in rows]
 
 
+# ── Holidays for a specific worker (using their region_code) ──────────────────
+
+async def _fetch_holidays_from_api(region_code: str, year: int, session: AsyncSession) -> int:
+    """Llama a OpenHolidays y cachea festivos. Devuelve el nº de festivos insertados."""
+    from_date = f"{year}-01-01"
+    to_date = f"{year}-12-31"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                OPENHOLIDAYS_URL,
+                params={
+                    "countryIsoCode": "ES",
+                    "subdivisionCode": region_code,
+                    "validFrom": from_date,
+                    "validTo": to_date,
+                    "languageIsoCode": "ES",
+                },
+            )
+        resp.raise_for_status()
+        data = resp.json()
+    except httpx.HTTPError:
+        return 0
+
+    await session.execute(
+        delete(PublicHoliday).where(
+            PublicHoliday.region_code == region_code,
+            PublicHoliday.year == year,
+        )
+    )
+
+    count = 0
+    for item in data:
+        raw_date = item.get("startDate", "")[:10]
+        try:
+            h_date = date.fromisoformat(raw_date)
+        except ValueError:
+            continue
+        names = item.get("name", [])
+        name_es = next((n["text"] for n in names if n.get("language") == "ES"), None)
+        if not name_es and names:
+            name_es = names[0].get("text", "Festivo")
+        if not name_es:
+            name_es = "Festivo"
+        session.add(PublicHoliday(
+            region_code=region_code,
+            holiday_date=h_date,
+            name=name_es,
+            year=year,
+        ))
+        count += 1
+    await session.commit()
+    return count
+
+
+@router.get("/users/{user_id}/holidays", response_model=list[HolidayOut])
+async def get_worker_holidays(
+    user_id: UUID,
+    year: int = Query(...),
+    admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Festivos del trabajador para un año, según su Comunidad Autónoma.
+
+    Si no hay festivos cacheados para esa CCAA+año, los sincroniza desde
+    OpenHolidaysAPI antes de devolverlos.
+    """
+    worker_result = await session.execute(
+        select(User).where(User.id == user_id, User.company_id == admin.company_id)
+    )
+    worker = worker_result.scalar_one_or_none()
+    if not worker:
+        raise HTTPException(status_code=404, detail="Trabajador no encontrado")
+    if not worker.region_code:
+        return []
+
+    async def _query_cache() -> list[PublicHoliday]:
+        cached = await session.execute(
+            select(PublicHoliday)
+            .where(PublicHoliday.region_code == worker.region_code, PublicHoliday.year == year)
+            .order_by(PublicHoliday.holiday_date)
+        )
+        return list(cached.scalars().all())
+
+    rows = await _query_cache()
+    if not rows:
+        # Auto-sync silencioso: si falla el fetch, devolvemos vacío sin romper.
+        await _fetch_holidays_from_api(worker.region_code, year, session)
+        rows = await _query_cache()
+
+    return [HolidayOut(holiday_date=r.holiday_date, name=r.name, region_code=r.region_code) for r in rows]
+
+
 # ── Team calendar ─────────────────────────────────────────────────────────────
 
 @router.get("/admin/team-calendar", response_model=list[WorkerCalendarEntry])

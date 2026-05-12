@@ -105,6 +105,8 @@ export default function UsersPage() {
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set())
   // Ancla para selección por rango: primer día clicado sin seleccionar.
   const [anchorDate, setAnchorDate] = useState<string | null>(null)
+  // Festivos del trabajador para el año mostrado (clave fecha ISO → nombre festivo).
+  const [holidaysMap, setHolidaysMap] = useState<Map<string, string>>(new Map())
   const [bulkStart, setBulkStart] = useState("09:00")
   const [bulkEnd, setBulkEnd] = useState("17:00")
   const [splitShift, setSplitShift] = useState(false)
@@ -239,6 +241,19 @@ export default function UsersPage() {
     }
   };
 
+  const loadHolidaysYear = async (userId: string, year: number) => {
+    try {
+      const res = await api.get<Array<{ holiday_date: string; name: string }>>(
+        `/users/${userId}/holidays`, { params: { year } }
+      )
+      const map = new Map<string, string>()
+      for (const h of res.data) map.set(h.holiday_date, h.name)
+      setHolidaysMap(map)
+    } catch {
+      setHolidaysMap(new Map())
+    }
+  }
+
   const openSchedule = (user: User) => {
     const year = new Date().getFullYear()
     const month = new Date().getMonth() + 1
@@ -246,6 +261,7 @@ export default function UsersPage() {
     setCalYear(year)
     setCalMonth(month)
     loadScheduleMonth(user.id, year, month)
+    loadHolidaysYear(user.id, year)
     setShowScheduleDialog(true)
   }
 
@@ -313,9 +329,11 @@ export default function UsersPage() {
       const isSelected = selectedDates.has(dateStr)
       const isAnchor = anchorDate === dateStr
       const sched = scheduleMap.get(dateStr)
+      const holidayName = holidaysMap.get(dateStr)
       cells.push(
         <button
           key={dateStr}
+          title={holidayName || undefined}
           onClick={() => {
             if (isSelected) {
               // Quitar este día de la selección, conservando el resto del rango.
@@ -357,11 +375,17 @@ export default function UsersPage() {
             "rounded p-1 text-xs min-h-[3rem] flex flex-col items-center justify-start border transition-colors",
             isSelected ? "border-primary bg-primary/10" : "border-transparent",
             isAnchor ? "ring-2 ring-primary ring-offset-1" : "",
-            hasSchedule && !isSelected ? "bg-blue-50 text-blue-800" : "",
-            !hasSchedule && !isSelected ? "hover:bg-accent" : "",
+            holidayName && !isSelected ? "bg-red-50 text-red-700" : "",
+            hasSchedule && !isSelected && !holidayName ? "bg-blue-50 text-blue-800" : "",
+            !hasSchedule && !isSelected && !holidayName ? "hover:bg-accent" : "",
           ].join(" ")}
         >
-          <span className="font-medium">{day}</span>
+          <span className={`font-medium ${holidayName && !isSelected ? "text-red-700" : ""}`}>{day}</span>
+          {holidayName && !sched && (
+            <span className="text-[9px] leading-tight text-red-600 truncate w-full px-0.5" title={holidayName}>
+              {holidayName.length > 10 ? holidayName.slice(0, 10) + "…" : holidayName}
+            </span>
+          )}
           {sched && <span className="text-[10px] leading-tight">{sched.start_time}–{sched.end_time}</span>}
           {sched?.start_time_2 && sched?.end_time_2 && (
             <span className="text-[10px] leading-tight text-blue-600">{sched.start_time_2}–{sched.end_time_2}</span>
@@ -370,7 +394,7 @@ export default function UsersPage() {
       )
     }
     return cells
-  }, [calYear, calMonth, scheduleMap, selectedDates, anchorDate])
+  }, [calYear, calMonth, scheduleMap, selectedDates, anchorDate, holidaysMap])
 
   return (
     <div>
@@ -753,7 +777,7 @@ export default function UsersPage() {
       </Dialog>
 
       {/* Schedule Dialog */}
-      <Dialog open={showScheduleDialog} onOpenChange={(open) => { if (!open) { setShowScheduleDialog(false); setSelectedScheduleUser(null); setSelectedDates(new Set()); setAnchorDate(null); } }}>
+      <Dialog open={showScheduleDialog} onOpenChange={(open) => { if (!open) { setShowScheduleDialog(false); setSelectedScheduleUser(null); setSelectedDates(new Set()); setAnchorDate(null); setHolidaysMap(new Map()); } }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Cuadrante — {selectedScheduleUser?.full_name}</DialogTitle>
@@ -770,8 +794,12 @@ export default function UsersPage() {
                   onClick={() => {
                     const d = new Date(calYear, calMonth - 2, 1)
                     const newYear = d.getFullYear(); const newMonth = d.getMonth() + 1
+                    const yearChanged = newYear !== calYear
                     setCalYear(newYear); setCalMonth(newMonth)
-                    if (selectedScheduleUser) loadScheduleMonth(selectedScheduleUser.id, newYear, newMonth)
+                    if (selectedScheduleUser) {
+                      loadScheduleMonth(selectedScheduleUser.id, newYear, newMonth)
+                      if (yearChanged) loadHolidaysYear(selectedScheduleUser.id, newYear)
+                    }
                   }}
                 >‹</button>
                 <span className="font-semibold text-sm">
@@ -782,8 +810,12 @@ export default function UsersPage() {
                   onClick={() => {
                     const d = new Date(calYear, calMonth, 1)
                     const newYear = d.getFullYear(); const newMonth = d.getMonth() + 1
+                    const yearChanged = newYear !== calYear
                     setCalYear(newYear); setCalMonth(newMonth)
-                    if (selectedScheduleUser) loadScheduleMonth(selectedScheduleUser.id, newYear, newMonth)
+                    if (selectedScheduleUser) {
+                      loadScheduleMonth(selectedScheduleUser.id, newYear, newMonth)
+                      if (yearChanged) loadHolidaysYear(selectedScheduleUser.id, newYear)
+                    }
                   }}
                 >›</button>
               </div>
