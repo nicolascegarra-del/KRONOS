@@ -266,43 +266,51 @@ async def update_company(
         company.max_workers = body.max_workers
 
     # ── Plan / module logic (bidirectional) ──────────────────────────────────
-    if body.plan_tier is not None:
-        if body.plan_tier == "trial":
-            # Apply trial limits and enable all modules
-            for k, v in TRIAL_LIMITS.items():
-                setattr(company, k, v)
-            company.plan_tier = "trial"
-            company.is_trial = True
-        elif body.plan_tier in PLAN_MODULES:
-            # Apply the canonical module set for the chosen paid tier
-            modules = PLAN_MODULES[body.plan_tier]
-            company.geo_enabled = modules["geo_enabled"]
-            company.schedule_enabled = modules["schedule_enabled"]
-            company.vacation_enabled = modules["vacation_enabled"]
-            company.docs_enabled = modules["docs_enabled"]
-            company.plan_tier = body.plan_tier
+    if body.plan_tier == "trial":
+        # Apply trial limits and enable all modules
+        for k, v in TRIAL_LIMITS.items():
+            setattr(company, k, v)
+        company.plan_tier = "trial"
+        company.is_trial = True
+    elif body.plan_tier in PLAN_MODULES:
+        # Apply the canonical module set for the chosen paid tier
+        modules = PLAN_MODULES[body.plan_tier]
+        company.geo_enabled = modules["geo_enabled"]
+        company.schedule_enabled = modules["schedule_enabled"]
+        company.vacation_enabled = modules["vacation_enabled"]
+        company.docs_enabled = modules["docs_enabled"]
+        company.plan_tier = body.plan_tier
+        company.is_trial = False
+        # Clear trial limits on upgrade to paid plan
+        company.max_documents = None
+        company.max_vacation_requests = None
+    else:
+        # plan_tier == "personalizado" OR plan_tier is None OR unknown →
+        # each module flag (geo/schedule/vacation/docs) can be toggled
+        # independently. After applying them we re-infer the plan name.
+        modules_changed = any(f is not None for f in [
+            body.geo_enabled, body.schedule_enabled,
+            body.vacation_enabled, body.docs_enabled,
+        ])
+        if modules_changed:
+            if body.geo_enabled is not None:
+                company.geo_enabled = body.geo_enabled
+            if body.schedule_enabled is not None:
+                company.schedule_enabled = body.schedule_enabled
+            if body.vacation_enabled is not None:
+                company.vacation_enabled = body.vacation_enabled
+            if body.docs_enabled is not None:
+                company.docs_enabled = body.docs_enabled
+            company.plan_tier = infer_plan_tier(
+                company.geo_enabled, company.schedule_enabled,
+                company.vacation_enabled, company.docs_enabled,
+            )
             company.is_trial = False
-            # Clear trial limits on upgrade to paid plan
-            company.max_documents = None
-            company.max_vacation_requests = None
         elif body.plan_tier == "personalizado":
+            # Solo se envió plan_tier="personalizado" sin tocar flags → mantener
+            # los flags pero registrar el tier como personalizado.
             company.plan_tier = "personalizado"
             company.is_trial = False
-    elif any(f is not None for f in [body.geo_enabled, body.schedule_enabled,
-                                      body.vacation_enabled, body.docs_enabled]):
-        # Modules changed manually → apply them then infer the resulting plan
-        if body.geo_enabled is not None:
-            company.geo_enabled = body.geo_enabled
-        if body.schedule_enabled is not None:
-            company.schedule_enabled = body.schedule_enabled
-        if body.vacation_enabled is not None:
-            company.vacation_enabled = body.vacation_enabled
-        if body.docs_enabled is not None:
-            company.docs_enabled = body.docs_enabled
-        company.plan_tier = infer_plan_tier(
-            company.geo_enabled, company.schedule_enabled,
-            company.vacation_enabled, company.docs_enabled,
-        )
     # ─────────────────────────────────────────────────────────────────────────
 
     if body.nif is not None:
