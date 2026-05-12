@@ -94,6 +94,7 @@ export default function UsersPage() {
   const [resetSaving, setResetSaving] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
   const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetEmailStatus, setResetEmailStatus] = useState<{ sent: boolean; error: string | null } | null>(null);
 
   // Schedule dialog
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
@@ -115,6 +116,9 @@ export default function UsersPage() {
   const [filterRole, setFilterRole] = useState<"" | "admin" | "worker">("");
   const [filterStatus, setFilterStatus] = useState<"" | "active" | "inactive">("");
   const [search, setSearch] = useState("");
+
+  // Alta con set-password-link (solo modo creación)
+  const [sendSetPasswordLink, setSendSetPasswordLink] = useState(false);
 
   const fetchUsers = () => {
     setLoading(true);
@@ -151,6 +155,7 @@ export default function UsersPage() {
   const openCreate = () => {
     setEditUser(null);
     setForm(emptyForm);
+    setSendSetPasswordLink(false);
     setError(null);
     setDialogOpen(true);
   };
@@ -213,13 +218,20 @@ export default function UsersPage() {
     if (!resetUser) return;
     setResetSaving(true);
     setResetError(null);
+    setResetEmailStatus(null);
     try {
-      await api.post(`/users/${resetUser.id}/reset-password`, {
-        new_password: resetPassword,
-        send_email: resetSendEmail,
-      });
+      const res = await api.post<{ ok: boolean; email_sent: boolean; email_error: string | null }>(
+        `/users/${resetUser.id}/reset-password`,
+        { new_password: resetPassword, send_email: resetSendEmail },
+      );
       setResetSuccess(true);
-      setTimeout(() => setShowResetDialog(false), 1500);
+      if (resetSendEmail) {
+        setResetEmailStatus({ sent: res.data.email_sent, error: res.data.email_error });
+      }
+      // Si el email falló, no cerramos el diálogo: que el admin vea el motivo.
+      if (!resetSendEmail || res.data.email_sent) {
+        setTimeout(() => setShowResetDialog(false), 1800);
+      }
     } catch (err: any) {
       setResetError(err.response?.data?.detail || "Error al resetear la contraseña");
     } finally {
@@ -262,7 +274,8 @@ export default function UsersPage() {
         await api.post("/users", {
           email: form.email,
           full_name: form.full_name,
-          password: form.password,
+          password: sendSetPasswordLink ? null : form.password,
+          send_set_password_link: sendSetPasswordLink,
           scheduled_start: form.scheduled_start || null,
           scheduled_end: form.scheduled_end || null,
           dni: form.dni || null,
@@ -532,16 +545,31 @@ export default function UsersPage() {
                     required
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Contraseña</Label>
-                  <Input
-                    type="password"
-                    value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    required
-                    minLength={8}
+                <div className="flex items-start gap-2 p-3 border rounded-md bg-slate-50">
+                  <input
+                    type="checkbox"
+                    id="send-set-password-link"
+                    checked={sendSetPasswordLink}
+                    onChange={(e) => setSendSetPasswordLink(e.target.checked)}
+                    className="rounded mt-0.5"
                   />
+                  <label htmlFor="send-set-password-link" className="text-sm text-slate-700 cursor-pointer leading-snug">
+                    Enviar email al trabajador para que <strong>establezca su propia contraseña</strong>
+                    {" "}(en lugar de fijarla yo aquí).
+                  </label>
                 </div>
+                {!sendSetPasswordLink && (
+                  <div className="space-y-2">
+                    <Label>Contraseña</Label>
+                    <Input
+                      type="password"
+                      value={form.password}
+                      onChange={(e) => setForm({ ...form, password: e.target.value })}
+                      required
+                      minLength={8}
+                    />
+                  </div>
+                )}
               </>
             )}
 
@@ -665,8 +693,22 @@ export default function UsersPage() {
           </DialogHeader>
 
           {resetSuccess ? (
-            <div className="bg-green-50 border border-green-200 text-green-800 rounded-lg px-4 py-3 text-sm">
-              Contraseña actualizada correctamente.
+            <div className="space-y-3">
+              <div className="bg-green-50 border border-green-200 text-green-800 rounded-lg px-4 py-3 text-sm">
+                Contraseña actualizada correctamente.
+              </div>
+              {resetEmailStatus && (
+                resetEmailStatus.sent ? (
+                  <div className="bg-green-50 border border-green-200 text-green-800 rounded-lg px-4 py-2 text-xs">
+                    Email enviado al trabajador.
+                  </div>
+                ) : (
+                  <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-2 text-xs">
+                    No se pudo enviar el email{resetEmailStatus.error ? `: ${resetEmailStatus.error}` : ""}.
+                    La contraseña sí se ha cambiado; comunícasela manualmente.
+                  </div>
+                )
+              )}
             </div>
           ) : (
             <form onSubmit={handleResetPassword} className="space-y-4">

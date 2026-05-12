@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
-import { LayoutDashboard, Building2, Users, LogOut, X, CreditCard, FileText, Clock, Shield, MoreHorizontal, Menu, UserCircle } from "lucide-react";
+import { LayoutDashboard, Building2, Users, LogOut, X, CreditCard, FileText, Clock, Shield, MoreHorizontal, Menu, UserCircle, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -15,6 +15,7 @@ const navItems = [
   { href: "/superadmin/invoice-config", label: "Config. Facturas", icon: FileText },
   { href: "/superadmin/fichajes", label: "Fichajes", icon: Clock },
   { href: "/superadmin/access-logs", label: "Log de accesos", icon: Shield },
+  { href: "/superadmin/settings", label: "Configuración General", icon: Settings },
   { href: "/superadmin/profile", label: "Mi perfil", icon: UserCircle },
 ];
 

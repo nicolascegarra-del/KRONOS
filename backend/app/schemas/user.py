@@ -9,11 +9,14 @@ from app.models.user import UserRole, VacationDaysType
 class UserCreate(BaseModel):
     email: EmailStr
     full_name: str
-    password: str
+    password: Optional[str] = None  # Puede omitirse si send_set_password_link=True
     role: UserRole = UserRole.worker
     scheduled_start: Optional[time] = None
     scheduled_end: Optional[time] = None
     dni: Optional[str] = None
+    # Si True, ignora `password` y envía al trabajador un link para que él
+    # establezca su propia contraseña (token válido 7 días).
+    send_set_password_link: bool = False
 
 
 class UserUpdate(BaseModel):

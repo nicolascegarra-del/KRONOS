@@ -1,4 +1,7 @@
 import asyncio
+import secrets
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
@@ -10,6 +13,7 @@ from app.config import get_settings
 from app.database import get_session
 from app.dependencies import require_admin
 from app.models.company import Company
+from app.models.password_reset import PasswordResetToken
 from app.models.user import User, UserRole
 from app.schemas.user import UserCreate, UserRead, UserUpdate
 from app.services.auth import hash_password
@@ -95,10 +99,22 @@ async def create_user(
                     detail=f"Límite de trabajadores alcanzado ({company.max_workers} máximo)",
                 )
 
+    # Cuando se envía set-password link, generamos una pwd aleatoria que nadie
+    # llega a conocer (el trabajador la sobreescribe al usar el token).
+    if body.send_set_password_link:
+        initial_password = secrets.token_urlsafe(24)
+    else:
+        if not body.password or len(body.password) < 8:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="La contraseña debe tener al menos 8 caracteres",
+            )
+        initial_password = body.password
+
     user = User(
         email=body.email,
         full_name=body.full_name,
-        hashed_password=hash_password(body.password),
+        hashed_password=hash_password(initial_password),
         role=body.role,
         scheduled_start=body.scheduled_start,
         scheduled_end=body.scheduled_end,
@@ -108,20 +124,52 @@ async def create_user(
     await session.commit()
     await session.refresh(user)
 
-    # Fire-and-forget welcome email
-    asyncio.create_task(_fire_welcome_email(admin.company_id, user.email, user.full_name, body.password))
+    if body.send_set_password_link:
+        # Token de 7 días para que el trabajador establezca su contraseña.
+        token_value = secrets.token_urlsafe(32)
+        expires = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=7)
+        session.add(PasswordResetToken(user_id=user.id, token=token_value, expires_at=expires))
+        await session.commit()
+        cfg = get_settings()
+        set_password_link = f"{cfg.APP_URL}/reset-password?token={token_value}"
+        asyncio.create_task(_fire_set_password_email(
+            admin.company_id, user.email, user.full_name, set_password_link
+        ))
+    else:
+        # Fire-and-forget welcome email con la pwd elegida por el admin
+        asyncio.create_task(_fire_welcome_email(admin.company_id, user.email, user.full_name, initial_password))
 
     return user
 
 
-@router.post("/{user_id}/reset-password", status_code=status.HTTP_204_NO_CONTENT)
+async def _fire_set_password_email(company_id, to_email: str, full_name: str, link: str) -> None:
+    """Envía email tipo 'establece tu contraseña' al dar de alta a un trabajador."""
+    try:
+        from app.database import AsyncSessionLocal
+        from app.routers.settings import _get_email_config
+        from app.services.email_service import send_password_reset_email
+
+        async with AsyncSessionLocal() as s:
+            config = await _get_email_config(s, company_id)
+        await send_password_reset_email(config, to_email, full_name, link)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).exception("[set-password-email] Error enviando a %s: %s", to_email, exc)
+
+
+@router.post("/{user_id}/reset-password")
 async def reset_user_password(
     user_id: UUID,
     body: dict,
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(require_admin),
 ):
-    """Admin resets a worker's password. Optionally sends email notification."""
+    """Admin resets a worker's password. Optionally sends email notification.
+
+    El envío se espera y se reporta al cliente: la respuesta incluye
+    `email_sent` y `email_error` (cuando proceda) para que el admin sepa
+    si el trabajador recibió el aviso o por qué falló.
+    """
     result = await session.execute(
         select(User).where(User.id == user_id, User.company_id == admin.company_id)
     )
@@ -140,26 +188,41 @@ async def reset_user_password(
     session.add(user)
     await session.commit()
 
+    email_sent = False
+    email_error: Optional[str] = None
     if body.get("send_email", True):
-        asyncio.create_task(_fire_admin_password_reset_email(
+        email_sent, email_error = await _send_admin_password_reset_email(
             admin.company_id, user.email, user.full_name, new_password
-        ))
+        )
+
+    return {"ok": True, "email_sent": email_sent, "email_error": email_error}
 
 
-async def _fire_admin_password_reset_email(
+async def _send_admin_password_reset_email(
     company_id, to_email: str, full_name: str, new_password: str
-) -> None:
+) -> tuple[bool, Optional[str]]:
+    """Envía el email de aviso de password reset.
+
+    Devuelve (sent, error_msg). Si no hay SMTP configurado (ni el de la empresa
+    ni el global de Klyp) → (False, "SMTP no configurado").
+    """
+    import logging
+    log = logging.getLogger(__name__)
     try:
         from app.database import AsyncSessionLocal
         from app.routers.settings import _get_email_config
         from app.services.email_service import send_admin_password_reset_email
 
         cfg = get_settings()
-        async with AsyncSessionLocal() as session:
-            config = await _get_email_config(session, company_id)
+        async with AsyncSessionLocal() as s:
+            config = await _get_email_config(s, company_id)
+        if not config or not config.smtp_host:
+            return False, "No hay SMTP configurado (ni para la empresa ni global)"
         await send_admin_password_reset_email(config, to_email, full_name, new_password, cfg.APP_URL)
+        return True, None
     except Exception as exc:
-        import logging; logging.getLogger(__name__).error("[admin-reset-email] Error: %s", exc)
+        log.exception("[admin-reset-email] Error enviando email a %s", to_email)
+        return False, f"{exc.__class__.__name__}: {exc}"
 
 
 @router.put("/{user_id}", response_model=UserRead)
