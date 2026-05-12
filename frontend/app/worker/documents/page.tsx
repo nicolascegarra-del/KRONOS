@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { downloadBlob } from "@/lib/downloadBlob";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,17 +16,21 @@ interface DocumentOut {
   uploaded_at: string;
   category: string | null;
   is_read: boolean;
+  period_month?: number | null;
+  period_year?: number | null;
 }
+
+const SECTION_TITLES: Record<string, string> = {
+  contrato: "Contratos",
+  nomina: "Nóminas",
+  otros: "Otros",
+};
+
+const SECTION_ORDER: Array<"contrato" | "nomina" | "otros"> = ["contrato", "nomina", "otros"];
 
 function formatBytes(b: number) {
   if (b < 1024 * 1024) return `${(b / 1024).toFixed(0)} KB`;
   return `${(b / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function categoryLabel(cat: string | null) {
-  if (!cat) return null;
-  const map: Record<string, string> = { nomina: "Nómina", contrato: "Contrato", otros: "Otros" };
-  return map[cat] ?? cat;
 }
 
 export default function WorkerDocumentsPage() {
@@ -99,6 +103,78 @@ export default function WorkerDocumentsPage() {
     setPdfName("");
   };
 
+  const sections = useMemo(() => {
+    const groups: Record<"contrato" | "nomina" | "otros", DocumentOut[]> = {
+      contrato: [],
+      nomina: [],
+      otros: [],
+    };
+    for (const d of docs) {
+      if (d.category === "contrato") groups.contrato.push(d);
+      else if (d.category === "nomina") groups.nomina.push(d);
+      else groups.otros.push(d);
+    }
+    // Nóminas: año desc, mes desc, fecha de subida desc
+    groups.nomina.sort((a, b) => {
+      const ya = a.period_year ?? 0, yb = b.period_year ?? 0;
+      if (yb !== ya) return yb - ya;
+      const ma = a.period_month ?? 0, mb = b.period_month ?? 0;
+      if (mb !== ma) return mb - ma;
+      return new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime();
+    });
+    return groups;
+  }, [docs]);
+
+  const renderCard = (doc: DocumentOut) => (
+    <Card key={doc.id} className={doc.is_read ? "" : "border-blue-300 bg-blue-50/40"}>
+      <CardContent className="p-4 flex items-center justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="relative shrink-0">
+            <FileText className="w-9 h-9 text-red-500 mt-0.5" />
+            {!doc.is_read && (
+              <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-white" />
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className={`text-sm truncate ${!doc.is_read ? "font-semibold" : "font-medium"}`} title={doc.filename}>
+              {doc.filename}
+            </p>
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              {!doc.is_read && (
+                <Badge className="text-xs bg-blue-500 hover:bg-blue-500 px-1.5 py-0">Nuevo</Badge>
+              )}
+              <span className="text-xs text-muted-foreground">{formatBytes(doc.size_bytes)}</span>
+              <span className="text-xs text-muted-foreground">
+                {new Date(doc.uploaded_at).toLocaleDateString("es-ES")}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-1 shrink-0">
+          <Button
+            size="sm"
+            variant={doc.is_read ? "outline" : "default"}
+            onClick={() => handleView(doc)}
+            disabled={viewing === doc.id}
+            className="gap-1.5"
+          >
+            {viewing === doc.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
+            Ver
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => handleDownload(doc)}
+            disabled={downloading === doc.id}
+            className="gap-1.5"
+          >
+            {downloading === doc.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -108,7 +184,7 @@ export default function WorkerDocumentsPage() {
   }
 
   return (
-    <div className="px-4 py-6 space-y-4">
+    <div className="px-4 py-6 space-y-6">
       <h1 className="text-xl font-semibold">Mis documentos</h1>
 
       {docs.length === 0 ? (
@@ -120,68 +196,20 @@ export default function WorkerDocumentsPage() {
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {docs.map((doc) => (
-            <Card key={doc.id} className={doc.is_read ? "" : "border-blue-300 bg-blue-50/40"}>
-              <CardContent className="p-4 flex items-center justify-between gap-3">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="relative shrink-0">
-                    <FileText className="w-9 h-9 text-red-500 mt-0.5" />
-                    {!doc.is_read && (
-                      <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-white" />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className={`text-sm truncate ${!doc.is_read ? "font-semibold" : "font-medium"}`} title={doc.filename}>
-                      {doc.filename}
-                    </p>
-                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      {!doc.is_read && (
-                        <Badge className="text-xs bg-blue-500 hover:bg-blue-500 px-1.5 py-0">Nuevo</Badge>
-                      )}
-                      {doc.category && (
-                        <Badge variant="outline" className="text-xs">{categoryLabel(doc.category)}</Badge>
-                      )}
-                      <span className="text-xs text-muted-foreground">{formatBytes(doc.size_bytes)}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(doc.uploaded_at).toLocaleDateString("es-ES")}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex gap-1 shrink-0">
-                  <Button
-                    size="sm"
-                    variant={doc.is_read ? "outline" : "default"}
-                    onClick={() => handleView(doc)}
-                    disabled={viewing === doc.id}
-                    className="gap-1.5"
-                  >
-                    {viewing === doc.id ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Eye className="w-3.5 h-3.5" />
-                    )}
-                    Ver
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleDownload(doc)}
-                    disabled={downloading === doc.id}
-                    className="gap-1.5"
-                  >
-                    {downloading === doc.id ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Download className="w-3.5 h-3.5" />
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        SECTION_ORDER.map((key) => {
+          const items = sections[key];
+          if (items.length === 0) return null;
+          return (
+            <section key={key} className="space-y-2">
+              <h2 className="text-sm font-semibold text-slate-700">
+                {SECTION_TITLES[key]} <span className="text-muted-foreground font-normal">({items.length})</span>
+              </h2>
+              <div className="space-y-2">
+                {items.map(renderCard)}
+              </div>
+            </section>
+          );
+        })
       )}
 
       {/* PDF viewer modal */}

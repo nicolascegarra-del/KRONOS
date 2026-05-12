@@ -91,6 +91,8 @@ export default function AdminDocumentsPage() {
 
   const [uploading, setUploading] = useState(false);
   const [uploadCategory, setUploadCategory] = useState<string>("");
+  const [uploadPeriodMonth, setUploadPeriodMonth] = useState<number>(new Date().getMonth() + 1);
+  const [uploadPeriodYear, setUploadPeriodYear] = useState<number>(new Date().getFullYear());
   const [uploadReport, setUploadReport] = useState<UploadReport | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -128,12 +130,20 @@ export default function AdminDocumentsPage() {
 
   const handleUpload = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
+    if (uploadCategory === "nomina" && (!uploadPeriodMonth || !uploadPeriodYear)) {
+      setUploadError("Selecciona mes y año para subir nóminas");
+      return;
+    }
     setUploading(true);
     setUploadError(null);
     try {
       const formData = new FormData();
       Array.from(fileList).forEach((f) => formData.append("files", f));
       if (uploadCategory) formData.append("category", uploadCategory);
+      if (uploadCategory === "nomina") {
+        formData.append("period_month", String(uploadPeriodMonth));
+        formData.append("period_year", String(uploadPeriodYear));
+      }
       const r = await api.post<UploadReport>("/documents/bulk-upload", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
@@ -240,6 +250,30 @@ export default function AdminDocumentsPage() {
                 <option key={c} value={c}>{categoryLabel(c)}</option>
               ))}
             </select>
+            {uploadCategory === "nomina" && (
+              <>
+                <select
+                  value={uploadPeriodMonth}
+                  onChange={(e) => setUploadPeriodMonth(Number(e.target.value))}
+                  className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+                  aria-label="Mes de la nómina"
+                >
+                  {["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"].map((label, i) => (
+                    <option key={i + 1} value={i + 1}>{label}</option>
+                  ))}
+                </select>
+                <select
+                  value={uploadPeriodYear}
+                  onChange={(e) => setUploadPeriodYear(Number(e.target.value))}
+                  className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+                  aria-label="Año de la nómina"
+                >
+                  {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </>
+            )}
             <Button
               size="sm"
               variant="outline"
@@ -259,6 +293,12 @@ export default function AdminDocumentsPage() {
               onChange={(e) => handleUpload(e.target.files)}
             />
           </div>
+          {uploadCategory === "nomina" && (
+            <p className="text-xs text-muted-foreground">
+              Las nóminas asignadas se renombrarán automáticamente como
+              <strong> {["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"][uploadPeriodMonth - 1]}-{uploadPeriodYear}-Nombre_Trabajador.pdf</strong>.
+            </p>
+          )}
 
           {/* Drag & drop zone */}
           <div

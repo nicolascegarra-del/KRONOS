@@ -21,3 +21,6 @@ class Document(SQLModel, table=True):
     category: Optional[str] = Field(default=None)    # nomina | contrato | otros
     description: Optional[str] = Field(default=None)
     is_read: bool = Field(default=False)              # worker has opened/viewed this doc
+    # Periodo solo aplicable a categoría 'nomina'
+    period_month: Optional[int] = Field(default=None)  # 1-12
+    period_year: Optional[int] = Field(default=None)   # ej. 2026

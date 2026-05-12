@@ -12,11 +12,12 @@ Endpoints:
 """
 
 import asyncio
+import re
 from pathlib import Path
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select, delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -92,6 +93,9 @@ def _to_doc_out(doc: Document, worker_names: dict) -> DocumentOut:
         description=doc.description,
         user_id=doc.user_id,
         worker_name=worker_names.get(doc.user_id) if doc.user_id else None,
+        is_read=doc.is_read,
+        period_month=doc.period_month,
+        period_year=doc.period_year,
     )
 
 
@@ -174,6 +178,8 @@ async def list_my_documents(
         description=d.description,
         user_id=d.user_id,
         is_read=d.is_read,
+        period_month=d.period_month,
+        period_year=d.period_year,
     ) for d in docs]
 
 
@@ -254,13 +260,52 @@ async def list_documents(
 
 # ── Admin: bulk upload ────────────────────────────────────────────────────────
 
+_MONTH_NAMES_ES = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+]
+
+
+def _slugify_worker_name(name: str) -> str:
+    """Quita acentos y caracteres no [A-Za-z0-9] para usar el nombre en filenames."""
+    import unicodedata
+    s = unicodedata.normalize("NFKD", name).encode("ASCII", "ignore").decode("ASCII")
+    s = re.sub(r"\s+", "_", s.strip())
+    s = re.sub(r"[^\w\-]", "", s)
+    return s or "Trabajador"
+
+
+def _build_payslip_filename(month: int, year: int, worker_name: str) -> str:
+    return f"{_MONTH_NAMES_ES[month - 1]}-{year}-{_slugify_worker_name(worker_name)}.pdf"
+
+
 @router.post("/bulk-upload", response_model=BulkUploadReport, status_code=status.HTTP_201_CREATED)
 async def bulk_upload(
     files: List[UploadFile],
-    category: Optional[str] = None,
+    category: Optional[str] = Form(None),
+    period_month: Optional[int] = Form(None),
+    period_year: Optional[int] = Form(None),
     current_user: User = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
+    # Validación de periodo para nóminas
+    if category == "nomina":
+        if not period_month or not period_year:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Para subir nóminas debes seleccionar mes y año",
+            )
+        if period_month < 1 or period_month > 12:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Mes inválido",
+            )
+        if period_year < 2000 or period_year > 2100:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Año inválido",
+            )
+
     company = await _get_company(session, current_user.company_id)
 
     if not company.docs_enabled:
@@ -347,16 +392,21 @@ async def bulk_upload(
             size_bytes=size,
             uploaded_by=current_user.id,
             category=category,
+            period_month=period_month if category == "nomina" else None,
+            period_year=period_year if category == "nomina" else None,
         )
 
         if dni and dni in worker_by_dni:
             user_id, worker_name = worker_by_dni[dni]
             doc.user_id = user_id
+            # Nóminas asignadas: renombrar a Mes-Año-NombreTrabajador.pdf
+            if category == "nomina" and period_month and period_year:
+                doc.filename = _build_payslip_filename(period_month, period_year, worker_name)
             session.add(doc)
             # flush to get doc.id before commit
             await session.flush()
             assigned.append(AssignedItem(
-                filename=original_name,
+                filename=doc.filename,
                 worker_name=worker_name,
                 worker_id=str(user_id),
                 size_bytes=size,
