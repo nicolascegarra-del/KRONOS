@@ -102,6 +102,8 @@ export default function UsersPage() {
   const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1) // 1-based
   const [scheduleMap, setScheduleMap] = useState<Map<string, { start_time: string; end_time: string; start_time_2?: string; end_time_2?: string }>>(new Map())
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set())
+  // Ancla para selección por rango: primer día clicado sin seleccionar.
+  const [anchorDate, setAnchorDate] = useState<string | null>(null)
   const [bulkStart, setBulkStart] = useState("09:00")
   const [bulkEnd, setBulkEnd] = useState("17:00")
   const [splitShift, setSplitShift] = useState(false)
@@ -189,6 +191,7 @@ export default function UsersPage() {
       }
       setScheduleMap(map)
       setSelectedDates(new Set())
+      setAnchorDate(null)
     } catch (e) {
       console.error(e)
     } finally {
@@ -295,21 +298,52 @@ export default function UsersPage() {
       const dateStr = `${calYear}-${String(calMonth).padStart(2,'0')}-${String(day).padStart(2,'0')}`
       const hasSchedule = scheduleMap.has(dateStr)
       const isSelected = selectedDates.has(dateStr)
+      const isAnchor = anchorDate === dateStr
       const sched = scheduleMap.get(dateStr)
       cells.push(
         <button
           key={dateStr}
           onClick={() => {
+            if (isSelected) {
+              // Quitar este día de la selección, conservando el resto del rango.
+              setSelectedDates(prev => {
+                const next = new Set(prev)
+                next.delete(dateStr)
+                if (next.size === 0) setAnchorDate(null)
+                return next
+              })
+              if (isAnchor) setAnchorDate(null)
+              return
+            }
+            if (anchorDate) {
+              // Construir rango desde el ancla hasta este día.
+              const start = anchorDate < dateStr ? anchorDate : dateStr
+              const end = anchorDate < dateStr ? dateStr : anchorDate
+              setSelectedDates(prev => {
+                const next = new Set(prev)
+                const startDate = new Date(start + "T00:00:00")
+                const endDate = new Date(end + "T00:00:00")
+                for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+                  const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+                  next.add(ds)
+                }
+                return next
+              })
+              setAnchorDate(null)
+              return
+            }
+            // Primer click: marcar este día como ancla y seleccionarlo.
             setSelectedDates(prev => {
               const next = new Set(prev)
-              if (next.has(dateStr)) next.delete(dateStr)
-              else next.add(dateStr)
+              next.add(dateStr)
               return next
             })
+            setAnchorDate(dateStr)
           }}
           className={[
             "rounded p-1 text-xs min-h-[3rem] flex flex-col items-center justify-start border transition-colors",
             isSelected ? "border-primary bg-primary/10" : "border-transparent",
+            isAnchor ? "ring-2 ring-primary ring-offset-1" : "",
             hasSchedule && !isSelected ? "bg-blue-50 text-blue-800" : "",
             !hasSchedule && !isSelected ? "hover:bg-accent" : "",
           ].join(" ")}
@@ -323,7 +357,7 @@ export default function UsersPage() {
       )
     }
     return cells
-  }, [calYear, calMonth, scheduleMap, selectedDates])
+  }, [calYear, calMonth, scheduleMap, selectedDates, anchorDate])
 
   return (
     <div>
@@ -677,7 +711,7 @@ export default function UsersPage() {
       </Dialog>
 
       {/* Schedule Dialog */}
-      <Dialog open={showScheduleDialog} onOpenChange={(open) => { if (!open) { setShowScheduleDialog(false); setSelectedScheduleUser(null); setSelectedDates(new Set()); } }}>
+      <Dialog open={showScheduleDialog} onOpenChange={(open) => { if (!open) { setShowScheduleDialog(false); setSelectedScheduleUser(null); setSelectedDates(new Set()); setAnchorDate(null); } }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Cuadrante — {selectedScheduleUser?.full_name}</DialogTitle>
@@ -713,6 +747,10 @@ export default function UsersPage() {
               </div>
 
               {/* Calendar grid */}
+              <p className="text-xs text-muted-foreground bg-slate-50 border rounded px-2 py-1.5 leading-snug">
+                Pincha el primer día y luego el último para seleccionar el rango.
+                Pincha un día seleccionado para quitarlo (p. ej. fines de semana).
+              </p>
               <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-muted-foreground mb-1">
                 {["L","M","X","J","V","S","D"].map(d => <div key={d}>{d}</div>)}
               </div>
@@ -768,6 +806,7 @@ export default function UsersPage() {
                       }))
                       setScheduleMap(next)
                       setSelectedDates(new Set())
+                      setAnchorDate(null)
                     }}>Aplicar</Button>
                     <Button size="sm" variant="outline" onClick={async () => {
                       if (!selectedScheduleUser) return
@@ -777,8 +816,9 @@ export default function UsersPage() {
                       Array.from(selectedDates).forEach(d => next.delete(d))
                       setScheduleMap(next)
                       setSelectedDates(new Set())
+                      setAnchorDate(null)
                     }}>Libre</Button>
-                    <Button size="sm" variant="ghost" onClick={() => setSelectedDates(new Set())}>✕</Button>
+                    <Button size="sm" variant="ghost" onClick={() => { setSelectedDates(new Set()); setAnchorDate(null) }}>✕</Button>
                   </div>
                 </div>
               )}
