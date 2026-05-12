@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Pencil, Trash2, FileX, Users, ChevronDown, X, UserPlus } from "lucide-react";
+import { ROLE_LABELS } from "@/lib/roleLabels";
 
 interface CompanyOption {
   id: string;
@@ -47,12 +48,6 @@ interface UserForm {
 const EMPTY_FORM: UserForm = {
   email: "", full_name: "", password: "", role: "worker",
   company_id: "", scheduled_start: "", scheduled_end: "", dni: "", is_active: true,
-};
-
-const ROLE_LABELS: Record<string, string> = {
-  superadmin: "Superadmin",
-  admin: "Admin",
-  worker: "Trabajador",
 };
 
 function RoleBadge({ role }: { role: string }) {
@@ -206,7 +201,7 @@ function UserFormFields({
             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
           >
             <option value="superadmin">Superadmin</option>
-            <option value="admin">Admin</option>
+            <option value="admin">Administrador</option>
             <option value="worker">Trabajador</option>
           </select>
         </div>

@@ -336,7 +336,7 @@ export default function AdminDashboard() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold">Panel de Control</h1>
-          <p className="text-muted-foreground capitalize">
+          <p className="text-muted-foreground first-letter:uppercase">
             {format(new Date(), "EEEE, d 'de' MMMM yyyy", { locale: es })}
           </p>
         </div>

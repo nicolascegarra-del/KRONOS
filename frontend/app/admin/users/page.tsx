@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Plus, Pencil, UserX, UserCheck, CalendarDays, KeyRound } from "lucide-react";
+import { roleLabel } from "@/lib/roleLabels";
 
 const CCAA = [
   { code: "ES-AN", name: "Andalucía" }, { code: "ES-AR", name: "Aragón" },
@@ -356,7 +357,7 @@ export default function UsersPage() {
                     <td className="p-3 text-muted-foreground">{u.dni || "—"}</td>
                     <td className="p-3">
                       <Badge variant={u.role === "admin" ? "default" : "secondary"}>
-                        {u.role}
+                        {roleLabel(u.role)}
                       </Badge>
                     </td>
                     <td className="p-3">

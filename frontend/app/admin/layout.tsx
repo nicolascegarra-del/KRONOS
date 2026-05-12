@@ -33,8 +33,8 @@ const BASE_NAV = [
   { href: "/admin/absences", label: "Ausencias", icon: CalendarRange, feature: "vacation_enabled" },
   { href: "/admin/team-calendar", label: "Calendario", icon: CalendarRange, feature: "vacation_enabled" },
   { href: "/admin/documents", label: "Documentos", icon: FileText, feature: "docs_enabled" },
-  { href: "/admin/work-centers", label: "Centros trabajo", icon: MapPin, feature: null },
-  { href: "/admin/pause-types", label: "Tipos pausa", icon: Tag, feature: null },
+  { href: "/admin/work-centers", label: "Centros de Trabajo", icon: MapPin, feature: null },
+  { href: "/admin/pause-types", label: "Tipos de Pausa", icon: Tag, feature: null },
   { href: "/admin/settings", label: "Configuración", icon: Settings, feature: null },
   { href: "/admin/profile", label: "Mi perfil", icon: UserCircle, feature: null },
 ] as const;
