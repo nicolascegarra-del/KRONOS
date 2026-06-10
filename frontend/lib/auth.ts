@@ -4,7 +4,7 @@ export interface AuthUser {
   id: string;
   email: string;
   full_name: string;
-  role: "superadmin" | "admin" | "worker";
+  role: "superadmin" | "admin" | "worker" | "tablet";
   scheduled_start?: string;
   geo_consent: boolean | null;
   privacy_notice_accepted: boolean | null;

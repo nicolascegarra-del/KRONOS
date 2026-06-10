@@ -15,6 +15,8 @@ export default function Home() {
       router.replace("/superadmin/dashboard");
     } else if (user.role === "admin") {
       router.replace("/admin/dashboard");
+    } else if (user.role === "tablet") {
+      router.replace("/tablet");
     } else {
       router.replace("/worker/dashboard");
     }

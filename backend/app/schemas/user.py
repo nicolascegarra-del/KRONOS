@@ -14,9 +14,18 @@ class UserCreate(BaseModel):
     scheduled_start: Optional[time] = None
     scheduled_end: Optional[time] = None
     dni: Optional[str] = None
+    fichaje_code: Optional[str] = None  # código numérico (4-6) para fichaje por tablet
     # Si True, ignora `password` y envía al trabajador un link para que él
     # establezca su propia contraseña (token válido 7 días).
     send_set_password_link: bool = False
+
+
+class TabletUserCreate(BaseModel):
+    """Crea una cuenta de kiosco (rol tablet) para una empresa."""
+    email: EmailStr
+    full_name: str = "Tablet de fichaje"
+    password: str
+    work_center_id: Optional[UUID] = None
 
 
 class UserUpdate(BaseModel):
@@ -26,6 +35,7 @@ class UserUpdate(BaseModel):
     scheduled_end: Optional[time] = None
     is_active: Optional[bool] = None
     dni: Optional[str] = None
+    fichaje_code: Optional[str] = None  # código numérico (4-6) para fichaje por tablet
     vacation_days: Optional[int] = None
     vacation_days_type: Optional[VacationDaysType] = None
     # HR profile
@@ -78,7 +88,9 @@ class UserRead(BaseModel):
     created_at: datetime
     company_id: Optional[UUID] = None
     company_name: Optional[str] = None
+    work_center_id: Optional[UUID] = None
     dni: Optional[str] = None
+    fichaje_code: Optional[str] = None
     geo_consent: Optional[bool] = None
     vacation_days: int = 22
     vacation_days_type: VacationDaysType = VacationDaysType.laborales

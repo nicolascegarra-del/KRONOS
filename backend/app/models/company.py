@@ -45,6 +45,9 @@ class Company(SQLModel, table=True):
     docs_enabled: bool = Field(default=False)
     max_storage_mb: int = Field(default=100)  # storage quota in MB
 
+    # Tablet kiosk module — shared device where workers clock in/out with a numeric code
+    tablet_enabled: bool = Field(default=False)
+
     # Plan tier (trial | basico | pro | hr | total | personalizado)
     plan_tier: Optional[str] = Field(default=None)
     max_documents: Optional[int] = Field(default=None)        # None = unlimited

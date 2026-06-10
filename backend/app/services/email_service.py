@@ -129,6 +129,37 @@ async def send_admin_password_reset_email(
     await send_email(config, to_email, "Tu contraseña ha sido restablecida — Fichajes", html)
 
 
+async def send_fichaje_code_email(
+    config: Optional[EmailConfig],
+    to_email: str,
+    full_name: str,
+    code: str,
+    company_name: Optional[str] = None,
+) -> None:
+    """Envía al trabajador su código de fichaje para la pantalla tablet/kiosco."""
+    if not config or not config.smtp_host:
+        return
+    company_line = f" en <strong>{company_name}</strong>" if company_name else ""
+    html = f"""
+    <div style="font-family:sans-serif;max-width:520px;margin:0 auto">
+      <h2 style="color:#1e293b">Tu código de fichaje</h2>
+      <p>Hola <strong>{full_name}</strong>,</p>
+      <p>Este es tu código personal para fichar entrada y salida en la pantalla tablet{company_line}:</p>
+      <p style="font-size:28px;font-weight:700;letter-spacing:8px;background:#f1f5f9;padding:16px 24px;border-radius:8px;display:inline-block;text-align:center">
+        {code}
+      </p>
+      <p style="color:#64748b;font-size:13px">
+        Introduce este código en la tablet: si no tienes la jornada iniciada registrará tu <strong>entrada</strong>;
+        si ya la tienes iniciada registrará tu <strong>salida</strong>.
+      </p>
+      <p style="color:#94a3b8;font-size:12px;margin-top:24px">
+        No compartas este código con nadie. Si crees que alguien lo conoce, avisa a tu responsable para cambiarlo.
+      </p>
+    </div>
+    """
+    await send_email(config, to_email, "Tu código de fichaje — Fichajes", html)
+
+
 async def send_monthly_report_email(
     config: Optional[EmailConfig],
     to_email: str,

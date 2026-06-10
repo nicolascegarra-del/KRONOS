@@ -15,6 +15,7 @@ class UserRole(str, Enum):
     superadmin = "superadmin"
     admin = "admin"
     worker = "worker"
+    tablet = "tablet"  # cuenta de kiosco compartida (pantalla de fichaje por código)
 
 
 class VacationDaysType(str, Enum):
@@ -43,6 +44,7 @@ class User(SQLModel, table=True):
     monthly_report_enabled: bool = Field(default=False)
 
     dni: Optional[str] = Field(default=None)
+    fichaje_code: Optional[str] = Field(default=None, index=True)  # código numérico (4-6) para fichaje por tablet; único por empresa
     geo_consent: Optional[bool] = Field(default=None)
     geo_consent_date: Optional[datetime] = Field(default=None)
     privacy_notice_accepted: Optional[bool] = Field(default=None)

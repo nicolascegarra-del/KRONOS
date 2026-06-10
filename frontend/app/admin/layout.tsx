@@ -18,12 +18,13 @@ import {
   CalendarRange,
   FileText,
   UserCircle,
+  Tablet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import NotificationBell from "@/components/NotificationBell";
 import { api } from "@/lib/api";
 
-interface Features { schedule_enabled: boolean; vacation_enabled: boolean; docs_enabled: boolean; }
+interface Features { schedule_enabled: boolean; vacation_enabled: boolean; docs_enabled: boolean; tablet_enabled: boolean; }
 
 const BASE_NAV = [
   { href: "/admin/dashboard", label: "Panel", icon: LayoutDashboard, feature: null },
@@ -33,6 +34,7 @@ const BASE_NAV = [
   { href: "/admin/absences", label: "Ausencias", icon: CalendarRange, feature: "vacation_enabled" },
   { href: "/admin/team-calendar", label: "Calendario", icon: CalendarRange, feature: "vacation_enabled" },
   { href: "/admin/documents", label: "Documentos", icon: FileText, feature: "docs_enabled" },
+  { href: "/admin/tablet", label: "Tablet de fichaje", icon: Tablet, feature: "tablet_enabled" },
   { href: "/admin/work-centers", label: "Centros de Trabajo", icon: MapPin, feature: null },
   { href: "/admin/pause-types", label: "Tipos de Pausa", icon: Tag, feature: null },
   { href: "/admin/settings", label: "Configuración", icon: Settings, feature: null },
@@ -49,7 +51,7 @@ export default function AdminLayout({
   const { user, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [features, setFeatures] = useState<Features>({ schedule_enabled: true, vacation_enabled: true, docs_enabled: false });
+  const [features, setFeatures] = useState<Features>({ schedule_enabled: true, vacation_enabled: true, docs_enabled: false, tablet_enabled: false });
 
   useEffect(() => {
     // Sin cache: el superadmin puede activar/desactivar módulos en cualquier

@@ -44,6 +44,7 @@ interface User {
   position?: string;
   department?: string;
   region_code?: string;
+  fichaje_code?: string;
 }
 
 interface UserFormData {
@@ -58,6 +59,7 @@ interface UserFormData {
   position: string;
   department: string;
   region_code: string;
+  fichaje_code: string;
 }
 
 const emptyForm: UserFormData = {
@@ -72,9 +74,10 @@ const emptyForm: UserFormData = {
   position: "",
   department: "",
   region_code: "",
+  fichaje_code: "",
 };
 
-interface Features { schedule_enabled: boolean; vacation_enabled: boolean; }
+interface Features { schedule_enabled: boolean; vacation_enabled: boolean; tablet_enabled: boolean; }
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -84,7 +87,8 @@ export default function UsersPage() {
   const [form, setForm] = useState<UserFormData>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [features, setFeatures] = useState<Features>({ schedule_enabled: true, vacation_enabled: true });
+  const [features, setFeatures] = useState<Features>({ schedule_enabled: true, vacation_enabled: true, tablet_enabled: false });
+  const [codeEmailMsg, setCodeEmailMsg] = useState<string | null>(null);
 
   // Reset password dialog
   const [showResetDialog, setShowResetDialog] = useState(false);
@@ -132,6 +136,9 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
+    api.get<Features>("/companies/features")
+      .then((r) => setFeatures(r.data))
+      .catch(() => {});
   }, []);
 
   // Filtrado en cliente (la lista viene completa del endpoint)
@@ -176,8 +183,10 @@ export default function UsersPage() {
       position: u.position || "",
       department: u.department || "",
       region_code: u.region_code || "",
+      fichaje_code: u.fichaje_code || "",
     });
     setError(null);
+    setCodeEmailMsg(null);
     setDialogOpen(true);
   };
 
@@ -282,6 +291,7 @@ export default function UsersPage() {
           scheduled_start: form.scheduled_start || null,
           scheduled_end: form.scheduled_end || null,
           dni: form.dni || null,
+          fichaje_code: form.fichaje_code || "",
           vacation_days: form.vacation_days ? parseInt(form.vacation_days) : 22,
           vacation_days_type: form.vacation_days_type,
           ...hrFields,
@@ -295,6 +305,7 @@ export default function UsersPage() {
           scheduled_start: form.scheduled_start || null,
           scheduled_end: form.scheduled_end || null,
           dni: form.dni || null,
+          fichaje_code: form.fichaje_code || null,
           vacation_days: form.vacation_days ? parseInt(form.vacation_days) : 22,
           vacation_days_type: form.vacation_days_type,
           ...hrFields,
@@ -312,6 +323,31 @@ export default function UsersPage() {
   const toggleActive = async (u: User) => {
     await api.put(`/users/${u.id}`, { is_active: !u.is_active });
     fetchUsers();
+  };
+
+  // Genera un código numérico aleatorio de 6 dígitos para el campo de fichaje.
+  const generateFichajeCode = () => {
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    setForm((f) => ({ ...f, fichaje_code: code }));
+    setCodeEmailMsg(null);
+  };
+
+  // Reenvía por email al trabajador su código de fichaje actual (solo en edición).
+  const sendFichajeCodeEmail = async () => {
+    if (!editUser) return;
+    setCodeEmailMsg("Enviando…");
+    try {
+      const res = await api.post<{ email_sent: boolean; email_error: string | null }>(
+        `/users/${editUser.id}/fichaje-code/email`
+      );
+      setCodeEmailMsg(
+        res.data.email_sent
+          ? "✓ Código enviado por email"
+          : `No se pudo enviar: ${res.data.email_error ?? "error desconocido"}`
+      );
+    } catch (e: any) {
+      setCodeEmailMsg(e.response?.data?.detail || "No se pudo enviar el email");
+    }
   };
 
   // Memoize calendar grid cells — only regenerate when month/year or data change
@@ -637,6 +673,49 @@ export default function UsersPage() {
                 </p>
               </div>
             </div>
+
+            {features.tablet_enabled && (
+              <div className="space-y-2 rounded-lg border p-3 bg-slate-50">
+                <Label>Código de fichaje (tablet)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    inputMode="numeric"
+                    pattern="\d*"
+                    maxLength={6}
+                    value={form.fichaje_code}
+                    onChange={(e) => {
+                      setForm({ ...form, fichaje_code: e.target.value.replace(/\D/g, "").slice(0, 6) });
+                      setCodeEmailMsg(null);
+                    }}
+                    placeholder="4 a 6 dígitos"
+                    className="flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={generateFichajeCode}
+                    className="text-sm px-3 rounded-md border border-slate-200 hover:bg-white text-slate-600 whitespace-nowrap"
+                  >
+                    Generar
+                  </button>
+                  {editUser && (
+                    <button
+                      type="button"
+                      onClick={sendFichajeCodeEmail}
+                      disabled={!editUser.fichaje_code}
+                      title={editUser.fichaje_code ? "Enviar el código guardado por email" : "Guarda primero un código"}
+                      className="text-sm px-3 rounded-md border border-slate-200 hover:bg-white text-slate-600 whitespace-nowrap disabled:opacity-40"
+                    >
+                      Enviar por email
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  El trabajador usa este código en la tablet para fichar. Debe ser único en la empresa.
+                  {editUser && " Para enviar un código nuevo, guarda primero los cambios."}
+                </p>
+                {codeEmailMsg && <p className="text-xs text-slate-600">{codeEmailMsg}</p>}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">

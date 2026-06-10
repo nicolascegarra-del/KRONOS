@@ -142,6 +142,7 @@ export default function LoginPage() {
     const user = useAuthStore.getState().user;
     if (user?.role === "superadmin") router.replace("/superadmin/dashboard");
     else if (user?.role === "admin") router.replace("/admin/dashboard");
+    else if (user?.role === "tablet") router.replace("/tablet");
     else router.replace("/worker/dashboard");
   };
 

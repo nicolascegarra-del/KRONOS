@@ -25,23 +25,23 @@ router = APIRouter(prefix="/companies", tags=["companies"])
 
 # Canonical module state for each paid tier (geo always True — free in all plans)
 PLAN_MODULES: dict[str, dict] = {
-    "basico": dict(geo_enabled=True, schedule_enabled=False, vacation_enabled=False, docs_enabled=False),
-    "pro":    dict(geo_enabled=True, schedule_enabled=True,  vacation_enabled=False, docs_enabled=False),
-    "hr":     dict(geo_enabled=True, schedule_enabled=True,  vacation_enabled=True,  docs_enabled=False),
-    "total":  dict(geo_enabled=True, schedule_enabled=True,  vacation_enabled=True,  docs_enabled=True),
+    "basico": dict(geo_enabled=True, schedule_enabled=False, vacation_enabled=False, docs_enabled=False, tablet_enabled=False),
+    "pro":    dict(geo_enabled=True, schedule_enabled=True,  vacation_enabled=False, docs_enabled=False, tablet_enabled=False),
+    "hr":     dict(geo_enabled=True, schedule_enabled=True,  vacation_enabled=True,  docs_enabled=False, tablet_enabled=False),
+    "total":  dict(geo_enabled=True, schedule_enabled=True,  vacation_enabled=True,  docs_enabled=True,  tablet_enabled=True),
 }
 
 # Limits applied when assigning the trial plan
 TRIAL_LIMITS = dict(
     max_workers=2, max_fichajes=60, max_documents=5, max_vacation_requests=5,
-    geo_enabled=True, schedule_enabled=True, vacation_enabled=True, docs_enabled=True,
+    geo_enabled=True, schedule_enabled=True, vacation_enabled=True, docs_enabled=True, tablet_enabled=True,
 )
 
 
-def infer_plan_tier(geo: bool, schedule: bool, vacation: bool, docs: bool) -> str:
+def infer_plan_tier(geo: bool, schedule: bool, vacation: bool, docs: bool, tablet: bool) -> str:
     """Return the plan name that matches the given module flags, or 'personalizado'."""
     state = dict(geo_enabled=geo, schedule_enabled=schedule,
-                 vacation_enabled=vacation, docs_enabled=docs)
+                 vacation_enabled=vacation, docs_enabled=docs, tablet_enabled=tablet)
     for plan, modules in PLAN_MODULES.items():
         if modules == state:
             return plan
@@ -75,6 +75,7 @@ def _to_read(c: Company, worker_count: int, fichaje_count: int = 0) -> CompanyRe
         max_fichajes=c.max_fichajes,
         docs_enabled=c.docs_enabled if c.docs_enabled is not None else False,
         max_storage_mb=c.max_storage_mb if c.max_storage_mb is not None else 100,
+        tablet_enabled=c.tablet_enabled if c.tablet_enabled is not None else False,
         nif=c.nif,
         address=c.address,
         city=c.city,
@@ -115,15 +116,16 @@ async def get_company_features(
     """Return feature flags for the current user's company (usable by admin and worker)."""
     if not user.company_id:
         # Superadmin has no company — all features enabled
-        return {"schedule_enabled": True, "vacation_enabled": True, "docs_enabled": False}
+        return {"schedule_enabled": True, "vacation_enabled": True, "docs_enabled": False, "tablet_enabled": False}
     result = await session.execute(select(Company).where(Company.id == user.company_id))
     company = result.scalar_one_or_none()
     if not company:
-        return {"schedule_enabled": True, "vacation_enabled": True, "docs_enabled": False}
+        return {"schedule_enabled": True, "vacation_enabled": True, "docs_enabled": False, "tablet_enabled": False}
     return {
         "schedule_enabled": company.schedule_enabled if company.schedule_enabled is not None else True,
         "vacation_enabled": company.vacation_enabled if company.vacation_enabled is not None else True,
         "docs_enabled": company.docs_enabled if company.docs_enabled is not None else False,
+        "tablet_enabled": company.tablet_enabled if company.tablet_enabled is not None else False,
     }
 
 
@@ -279,6 +281,7 @@ async def update_company(
         company.schedule_enabled = modules["schedule_enabled"]
         company.vacation_enabled = modules["vacation_enabled"]
         company.docs_enabled = modules["docs_enabled"]
+        company.tablet_enabled = modules["tablet_enabled"]
         company.plan_tier = body.plan_tier
         company.is_trial = False
         # Clear trial limits on upgrade to paid plan
@@ -290,7 +293,7 @@ async def update_company(
         # independently. After applying them we re-infer the plan name.
         modules_changed = any(f is not None for f in [
             body.geo_enabled, body.schedule_enabled,
-            body.vacation_enabled, body.docs_enabled,
+            body.vacation_enabled, body.docs_enabled, body.tablet_enabled,
         ])
         if modules_changed:
             if body.geo_enabled is not None:
@@ -301,9 +304,12 @@ async def update_company(
                 company.vacation_enabled = body.vacation_enabled
             if body.docs_enabled is not None:
                 company.docs_enabled = body.docs_enabled
+            if body.tablet_enabled is not None:
+                company.tablet_enabled = body.tablet_enabled
             company.plan_tier = infer_plan_tier(
                 company.geo_enabled, company.schedule_enabled,
                 company.vacation_enabled, company.docs_enabled,
+                company.tablet_enabled,
             )
             company.is_trial = False
         elif body.plan_tier == "personalizado":

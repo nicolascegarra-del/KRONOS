@@ -67,6 +67,21 @@ async def require_superadmin(current_user: User = Depends(get_current_user)) -> 
     return current_user
 
 
+async def require_tablet(current_user: User = Depends(get_current_user)) -> User:
+    """Cuenta de kiosco compartida: rol tablet asociado a una empresa."""
+    if current_user.role != UserRole.tablet:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tablet kiosk access required",
+        )
+    if current_user.company_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tablet account is not associated with a company.",
+        )
+    return current_user
+
+
 async def require_admin_or_superadmin(
     current_user: User = Depends(get_current_user),
 ) -> User:

@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy import delete as sa_delete, select
 from sqlalchemy.orm import selectinload
@@ -11,11 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy import func as sql_func
 from app.database import get_session
+from app.limiter import limiter
 from app.dependencies import (
     get_current_user,
     require_admin,
     require_admin_or_superadmin,
     require_superadmin,
+    require_tablet,
 )
 from app.models.company import Company
 from app.models.fichaje import Fichaje, FichajeStatus
@@ -376,6 +378,105 @@ async def get_active_fichaje(
     session: AsyncSession = Depends(get_session),
 ):
     return await _get_active_fichaje(current_user.id, session)
+
+
+# ── Kiosco / Tablet ─────────────────────────────────────────────────────────────
+
+class KioskRequest(BaseModel):
+    code: str
+
+
+class KioskResponse(BaseModel):
+    worker_name: str
+    action: str  # "start" | "end"
+    total_minutes: Optional[int] = None
+    start_time: Optional[datetime] = None
+
+
+@router.post("/kiosk", response_model=KioskResponse)
+@limiter.limit("30/minute")
+async def kiosk_fichaje(
+    request: Request,
+    body: KioskRequest,
+    tablet: User = Depends(require_tablet),
+    session: AsyncSession = Depends(get_session),
+):
+    """Fichaje desde la tablet compartida: resuelve el trabajador por su código y
+    decide automáticamente entrada/salida según tenga o no jornada activa.
+
+    El trabajador NUNCA elige entrada o salida — solo introduce su código.
+    """
+    code = (body.code or "").strip()
+    worker_result = await session.execute(
+        select(User).where(
+            User.company_id == tablet.company_id,
+            User.fichaje_code == code,
+            User.role == UserRole.worker,
+            User.is_active == True,
+        )
+    )
+    worker = worker_result.scalar_one_or_none()
+    if not worker or not code:
+        # Mensaje genérico para no revelar qué códigos existen.
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Trabajador no válido. Avise a su responsable.",
+        )
+
+    active = await _get_active_fichaje(worker.id, session)
+
+    if active is None:
+        # ── Entrada ──
+        await _check_fichaje_limit(worker, session)
+        now = _now()
+        fichaje = Fichaje(
+            user_id=worker.id,
+            start_time=now,
+            late_minutes=0,
+            modalidad="presencial",
+        )
+        session.add(fichaje)
+        await session.flush()
+        fichaje.late_minutes = calculate_late_minutes(worker, fichaje)
+
+        # Descanso mínimo de 12h entre jornadas (Art. 34.3 ET)
+        last_result = await session.execute(
+            select(Fichaje)
+            .where(
+                Fichaje.user_id == worker.id,
+                Fichaje.status == FichajeStatus.finished,
+                Fichaje.end_time.isnot(None),
+                Fichaje.is_deleted == False,
+            )
+            .order_by(Fichaje.end_time.desc())
+            .limit(1)
+        )
+        last_fichaje = last_result.scalar_one_or_none()
+        if last_fichaje and last_fichaje.end_time:
+            if (now - last_fichaje.end_time).total_seconds() < 12 * 3600:
+                fichaje.rest_violation = True
+
+        session.add(fichaje)
+        await session.commit()
+        return KioskResponse(worker_name=worker.full_name, action="start")
+
+    # ── Salida ──
+    now = _now()
+    for p in active.pausas:
+        if p.end_time is None:
+            p.end_time = now
+            session.add(p)
+    active.end_time = now
+    active.status = FichajeStatus.finished
+    active.total_minutes = calculate_total_minutes(active, active.pausas)
+    session.add(active)
+    await session.commit()
+    return KioskResponse(
+        worker_name=worker.full_name,
+        action="end",
+        total_minutes=active.total_minutes,
+        start_time=active.start_time,
+    )
 
 
 @router.get("/me", response_model=list[FichajeRead])

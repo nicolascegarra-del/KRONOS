@@ -153,6 +153,10 @@ async def _run_column_migrations() -> None:
         'CREATE INDEX IF NOT EXISTS ix_public_holiday_region_year ON public_holiday (region_code, year)',
         # fichaje_edit_log: action discriminator ('create' | 'update' | 'force_end')
         "ALTER TABLE fichaje_edit_log ADD COLUMN IF NOT EXISTS action VARCHAR NOT NULL DEFAULT 'update'",
+        # tablet kiosk module
+        'ALTER TABLE company ADD COLUMN IF NOT EXISTS tablet_enabled BOOLEAN NOT NULL DEFAULT false',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS fichaje_code VARCHAR',
+        'CREATE INDEX IF NOT EXISTS ix_user_company_fichaje_code ON "user" (company_id, fichaje_code)',
     ]
 
     for _sql in _migrations:

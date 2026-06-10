@@ -27,6 +27,7 @@ interface CompanyRead {
   max_fichajes?: number | null;
   docs_enabled: boolean;
   max_storage_mb: number;
+  tablet_enabled: boolean;
   created_at: string;
   logo_url?: string;
   // Billing
@@ -57,11 +58,11 @@ interface CreateForm {
 }
 
 // ── Plan definitions (mirror of backend PLAN_MODULES) ────────────────────────
-const PLAN_MODULES: Record<string, { geo_enabled: boolean; schedule_enabled: boolean; vacation_enabled: boolean; docs_enabled: boolean }> = {
-  basico: { geo_enabled: true, schedule_enabled: false, vacation_enabled: false, docs_enabled: false },
-  pro:    { geo_enabled: true, schedule_enabled: true,  vacation_enabled: false, docs_enabled: false },
-  hr:     { geo_enabled: true, schedule_enabled: true,  vacation_enabled: true,  docs_enabled: false },
-  total:  { geo_enabled: true, schedule_enabled: true,  vacation_enabled: true,  docs_enabled: true  },
+const PLAN_MODULES: Record<string, { geo_enabled: boolean; schedule_enabled: boolean; vacation_enabled: boolean; docs_enabled: boolean; tablet_enabled: boolean }> = {
+  basico: { geo_enabled: true, schedule_enabled: false, vacation_enabled: false, docs_enabled: false, tablet_enabled: false },
+  pro:    { geo_enabled: true, schedule_enabled: true,  vacation_enabled: false, docs_enabled: false, tablet_enabled: false },
+  hr:     { geo_enabled: true, schedule_enabled: true,  vacation_enabled: true,  docs_enabled: false, tablet_enabled: false },
+  total:  { geo_enabled: true, schedule_enabled: true,  vacation_enabled: true,  docs_enabled: true,  tablet_enabled: true  },
 }
 
 const PLAN_LABELS: Record<string, string> = {
@@ -82,10 +83,11 @@ const PLAN_COLORS: Record<string, string> = {
   personalizado:"bg-orange-100 text-orange-700",
 }
 
-function inferPlan(geo: boolean, schedule: boolean, vacation: boolean, docs: boolean): string {
+function inferPlan(geo: boolean, schedule: boolean, vacation: boolean, docs: boolean, tablet: boolean): string {
   for (const [plan, mods] of Object.entries(PLAN_MODULES)) {
     if (mods.geo_enabled === geo && mods.schedule_enabled === schedule &&
-        mods.vacation_enabled === vacation && mods.docs_enabled === docs) return plan
+        mods.vacation_enabled === vacation && mods.docs_enabled === docs &&
+        mods.tablet_enabled === tablet) return plan
   }
   return "personalizado"
 }
@@ -101,6 +103,7 @@ interface EditForm {
   max_fichajes: string; // string to allow empty = unlimited
   docs_enabled: boolean;
   max_storage_mb: string;
+  tablet_enabled: boolean;
   // Billing
   nif: string;
   address: string;
@@ -141,7 +144,7 @@ export default function CompaniesPage() {
 
   // Edit dialog
   const [editTarget, setEditTarget] = useState<CompanyRead | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({ name: "", max_workers: 10, plan_tier: "", geo_enabled: true, schedule_enabled: true, vacation_enabled: true, is_trial: false, max_fichajes: "", docs_enabled: false, max_storage_mb: "100", nif: "", address: "", city: "", postal_code: "", phone: "", billing_email: "" });
+  const [editForm, setEditForm] = useState<EditForm>({ name: "", max_workers: 10, plan_tier: "", geo_enabled: true, schedule_enabled: true, vacation_enabled: true, is_trial: false, max_fichajes: "", docs_enabled: false, max_storage_mb: "100", tablet_enabled: false, nif: "", address: "", city: "", postal_code: "", phone: "", billing_email: "" });
   const [editError, setEditError] = useState<string | null>(null);
   const [editLoading, setEditLoading] = useState(false);
 
@@ -242,7 +245,7 @@ export default function CompaniesPage() {
     setEditForm({
       name: c.name,
       max_workers: c.max_workers,
-      plan_tier: c.plan_tier ?? inferPlan(c.geo_enabled, c.schedule_enabled, c.vacation_enabled, c.docs_enabled ?? false),
+      plan_tier: c.plan_tier ?? inferPlan(c.geo_enabled, c.schedule_enabled, c.vacation_enabled, c.docs_enabled ?? false, c.tablet_enabled ?? false),
       geo_enabled: c.geo_enabled,
       schedule_enabled: c.schedule_enabled,
       vacation_enabled: c.vacation_enabled,
@@ -250,6 +253,7 @@ export default function CompaniesPage() {
       max_fichajes: c.max_fichajes != null ? String(c.max_fichajes) : "",
       docs_enabled: c.docs_enabled ?? false,
       max_storage_mb: String(c.max_storage_mb ?? 100),
+      tablet_enabled: c.tablet_enabled ?? false,
       nif: c.nif ?? "",
       address: c.address ?? "",
       city: c.city ?? "",
@@ -404,7 +408,7 @@ export default function CompaniesPage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-semibold">{c.name}</p>
                         {(() => {
-                          const tier = c.plan_tier ?? inferPlan(c.geo_enabled, c.schedule_enabled, c.vacation_enabled, c.docs_enabled ?? false)
+                          const tier = c.plan_tier ?? inferPlan(c.geo_enabled, c.schedule_enabled, c.vacation_enabled, c.docs_enabled ?? false, c.tablet_enabled ?? false)
                           return (
                             <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${PLAN_COLORS[tier] ?? "bg-slate-100 text-slate-600"}`}>
                               {tier.toUpperCase()}
@@ -429,6 +433,9 @@ export default function CompaniesPage() {
                         </span>
                         <span className={`text-xs ${c.docs_enabled ? "text-green-600" : "text-slate-400"}`}>
                           📄 Documentos {c.docs_enabled ? "ON" : "OFF"}
+                        </span>
+                        <span className={`text-xs ${c.tablet_enabled ? "text-green-600" : "text-slate-400"}`}>
+                          📲 Tablet {c.tablet_enabled ? "ON" : "OFF"}
                         </span>
                       </div>
                       {/* Fichaje quota bar */}
@@ -656,7 +663,7 @@ export default function CompaniesPage() {
                 onChange={(e) => {
                   const tier = e.target.value
                   if (tier === "trial") {
-                    setEditForm((f) => ({ ...f, plan_tier: "trial", is_trial: true, max_workers: 2, max_fichajes: "60", geo_enabled: true, schedule_enabled: true, vacation_enabled: true, docs_enabled: true }))
+                    setEditForm((f) => ({ ...f, plan_tier: "trial", is_trial: true, max_workers: 2, max_fichajes: "60", geo_enabled: true, schedule_enabled: true, vacation_enabled: true, docs_enabled: true, tablet_enabled: true }))
                   } else if (PLAN_MODULES[tier]) {
                     setEditForm((f) => ({ ...f, plan_tier: tier, is_trial: false, ...PLAN_MODULES[tier] }))
                   } else {
@@ -692,7 +699,7 @@ export default function CompaniesPage() {
                     type="button"
                     onClick={() => setEditForm((f) => {
                       const next = { ...f, [key]: !f[key] }
-                      return { ...next, plan_tier: inferPlan(next.geo_enabled, next.schedule_enabled, next.vacation_enabled, next.docs_enabled) }
+                      return { ...next, plan_tier: inferPlan(next.geo_enabled, next.schedule_enabled, next.vacation_enabled, next.docs_enabled, next.tablet_enabled) }
                     })}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editForm[key] ? "bg-primary" : "bg-slate-200"}`}
                   >
@@ -711,7 +718,7 @@ export default function CompaniesPage() {
                     type="button"
                     onClick={() => setEditForm((f) => {
                       const next = { ...f, docs_enabled: !f.docs_enabled }
-                      return { ...next, plan_tier: inferPlan(next.geo_enabled, next.schedule_enabled, next.vacation_enabled, next.docs_enabled) }
+                      return { ...next, plan_tier: inferPlan(next.geo_enabled, next.schedule_enabled, next.vacation_enabled, next.docs_enabled, next.tablet_enabled) }
                     })}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editForm.docs_enabled ? "bg-primary" : "bg-slate-200"}`}
                   >
@@ -744,6 +751,23 @@ export default function CompaniesPage() {
                     </div>
                   </div>
                 )}
+              </div>
+              {/* Tablet kiosk module */}
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div>
+                  <p className="text-sm font-medium">Tablet de fichaje</p>
+                  <p className="text-xs text-muted-foreground">Pantalla de kiosco donde los trabajadores fichan con un código numérico.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditForm((f) => {
+                    const next = { ...f, tablet_enabled: !f.tablet_enabled }
+                    return { ...next, plan_tier: inferPlan(next.geo_enabled, next.schedule_enabled, next.vacation_enabled, next.docs_enabled, next.tablet_enabled) }
+                  })}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editForm.tablet_enabled ? "bg-primary" : "bg-slate-200"}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${editForm.tablet_enabled ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
               </div>
             </div>
             <hr />

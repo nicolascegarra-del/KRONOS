@@ -1,4 +1,5 @@
 import asyncio
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -15,11 +16,39 @@ from app.dependencies import require_admin
 from app.models.company import Company
 from app.models.password_reset import PasswordResetToken
 from app.models.user import User, UserRole
-from app.schemas.user import UserCreate, UserRead, UserUpdate
+from app.schemas.user import TabletUserCreate, UserCreate, UserRead, UserUpdate
 from app.services.auth import hash_password
 from app.services.import_export import generate_csv_template, parse_workers_csv
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+_FICHAJE_CODE_RE = re.compile(r"^\d{4,6}$")
+
+
+async def _validate_fichaje_code(
+    session: AsyncSession,
+    company_id: Optional[UUID],
+    code: str,
+    exclude_user_id: Optional[UUID] = None,
+) -> None:
+    """Valida formato (4-6 dígitos) y unicidad del código dentro de la empresa."""
+    if not _FICHAJE_CODE_RE.match(code):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="El código de fichaje debe tener entre 4 y 6 dígitos numéricos",
+        )
+    query = select(User.id).where(
+        User.company_id == company_id,
+        User.fichaje_code == code,
+    )
+    if exclude_user_id is not None:
+        query = query.where(User.id != exclude_user_id)
+    existing = await session.execute(query)
+    if existing.first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ya existe un trabajador con ese código de fichaje en la empresa",
+        )
 
 
 async def _active_worker_count(session: AsyncSession, company_id: UUID) -> int:
@@ -57,7 +86,7 @@ async def list_users(
 ):
     result = await session.execute(
         select(User)
-        .where(User.company_id == admin.company_id)
+        .where(User.company_id == admin.company_id, User.role != UserRole.tablet)
         .order_by(User.created_at)
         .limit(limit)
         .offset(offset)
@@ -111,6 +140,9 @@ async def create_user(
             )
         initial_password = body.password
 
+    if body.fichaje_code is not None:
+        await _validate_fichaje_code(session, admin.company_id, body.fichaje_code)
+
     user = User(
         email=body.email,
         full_name=body.full_name,
@@ -118,6 +150,8 @@ async def create_user(
         role=body.role,
         scheduled_start=body.scheduled_start,
         scheduled_end=body.scheduled_end,
+        dni=body.dni,
+        fichaje_code=body.fichaje_code,
         company_id=admin.company_id,
     )
     session.add(user)
@@ -225,6 +259,142 @@ async def _send_admin_password_reset_email(
         return False, f"{exc.__class__.__name__}: {exc}"
 
 
+@router.post("/{user_id}/fichaje-code/email")
+async def send_fichaje_code(
+    user_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(require_admin),
+):
+    """Reenvía por email al trabajador su código de fichaje actual.
+
+    Devuelve `email_sent` y `email_error` igual que el reset de contraseña.
+    """
+    result = await session.execute(
+        select(User).where(User.id == user_id, User.company_id == admin.company_id)
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if not user.fichaje_code:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="El trabajador no tiene un código de fichaje asignado",
+        )
+
+    company_result = await session.execute(
+        select(Company.name).where(Company.id == admin.company_id)
+    )
+    company_name = company_result.scalar_one_or_none()
+
+    email_sent, email_error = await _send_fichaje_code_email(
+        admin.company_id, user.email, user.full_name, user.fichaje_code, company_name
+    )
+    return {"ok": True, "email_sent": email_sent, "email_error": email_error}
+
+
+async def _send_fichaje_code_email(
+    company_id, to_email: str, full_name: str, code: str, company_name: Optional[str]
+) -> tuple[bool, Optional[str]]:
+    """Envía el email con el código de fichaje. Devuelve (sent, error_msg)."""
+    import logging
+    log = logging.getLogger(__name__)
+    try:
+        from app.database import AsyncSessionLocal
+        from app.routers.settings import _get_email_config
+        from app.services.email_service import send_fichaje_code_email
+
+        async with AsyncSessionLocal() as s:
+            config = await _get_email_config(s, company_id)
+        if not config or not config.smtp_host:
+            return False, "No hay SMTP configurado (ni para la empresa ni global)"
+        await send_fichaje_code_email(config, to_email, full_name, code, company_name)
+        return True, None
+    except Exception as exc:
+        log.exception("[fichaje-code-email] Error enviando email a %s", to_email)
+        return False, f"{exc.__class__.__name__}: {exc}"
+
+
+# ── Cuentas tablet (kiosco de fichaje) ──────────────────────────────────────────
+
+async def _require_tablet_module(session: AsyncSession, company_id: UUID) -> Company:
+    """Carga la empresa y verifica que el módulo tablet esté activado (403 si no)."""
+    result = await session.execute(select(Company).where(Company.id == company_id))
+    company = result.scalar_one_or_none()
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empresa no encontrada")
+    if not company.tablet_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El módulo de tablet de fichaje no está activado para esta empresa",
+        )
+    return company
+
+
+@router.get("/tablet", response_model=list[UserRead])
+async def list_tablet_users(
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(require_admin),
+):
+    result = await session.execute(
+        select(User)
+        .where(User.company_id == admin.company_id, User.role == UserRole.tablet)
+        .order_by(User.created_at)
+    )
+    return result.scalars().all()
+
+
+@router.post("/tablet", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+async def create_tablet_user(
+    body: TabletUserCreate,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(require_admin),
+):
+    await _require_tablet_module(session, admin.company_id)
+
+    if len(body.password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="La contraseña debe tener al menos 8 caracteres",
+        )
+
+    existing = await session.execute(select(User).where(User.email == body.email))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+
+    user = User(
+        email=body.email,
+        full_name=body.full_name,
+        hashed_password=hash_password(body.password),
+        role=UserRole.tablet,
+        company_id=admin.company_id,
+        work_center_id=body.work_center_id,
+    )
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
+@router.delete("/tablet/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_tablet_user(
+    user_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(require_admin),
+):
+    result = await session.execute(
+        select(User).where(
+            User.id == user_id,
+            User.company_id == admin.company_id,
+            User.role == UserRole.tablet,
+        )
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tablet user not found")
+    await session.delete(user)
+    await session.commit()
+
+
 @router.put("/{user_id}", response_model=UserRead)
 async def update_user(
     user_id: UUID,
@@ -247,6 +417,14 @@ async def update_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admins cannot assign admin or superadmin roles. Contact a superadmin.",
         )
+
+    # Validar código de fichaje (formato + unicidad en la empresa). "" => limpiar.
+    if "fichaje_code" in update_data:
+        code = update_data["fichaje_code"]
+        if code:
+            await _validate_fichaje_code(session, user.company_id, code, exclude_user_id=user.id)
+        else:
+            update_data["fichaje_code"] = None
 
     for key, value in update_data.items():
         setattr(user, key, value)

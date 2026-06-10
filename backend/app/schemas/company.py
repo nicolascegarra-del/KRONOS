@@ -24,6 +24,7 @@ class CompanyUpdate(BaseModel):
     is_trial: Optional[bool] = None
     docs_enabled: Optional[bool] = None
     max_storage_mb: Optional[int] = None
+    tablet_enabled: Optional[bool] = None
     # Billing
     nif: Optional[str] = None
     address: Optional[str] = None
@@ -58,6 +59,7 @@ class CompanyRead(BaseModel):
     fichaje_count: int = 0   # total fichajes used (populated by router)
     docs_enabled: bool = False
     max_storage_mb: int = 100
+    tablet_enabled: bool = False
     # Billing
     nif: Optional[str] = None
     address: Optional[str] = None
